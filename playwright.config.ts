@@ -29,6 +29,12 @@ export default defineConfig({
     // GitHub Actions version bumps, and locally the same command starts
     // well under 60s).
     timeout: 120_000,
+    // TEMPORARY diagnostics: Playwright hides the dev server's stdout by
+    // default (only stderr is shown), so the CI-only timeout above gave us
+    // zero insight into what `npm run dev` was actually doing while it
+    // hung. Force both streams to the job log to find out.
+    stdout: "pipe",
+    stderr: "pipe",
   },
   projects: [
     {

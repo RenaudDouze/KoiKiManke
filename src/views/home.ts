@@ -19,7 +19,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
         </button>
         <header class="home-header">
           <div class="logo">${icons.cart}</div>
-          <h1>Notre Liste de Courses</h1>
+          <h1>KoiKiManke</h1>
           <p class="tagline">Une liste de courses partagée, synchronisée en direct.</p>
         </header>
 

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "notre-liste-de-course",
+  "name": "koikimanke",
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "main": "worker/index.ts",

@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test("parcours complet : créer, ajouter avec quantité, catégoriser, cocher, partager, exporter/importer", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".home-header h1")).toHaveText("Notre Liste de Courses");
+  await expect(page.locator(".home-header h1")).toHaveText("KoiKiManke");
 
   // Création d'une liste
   await page.fill("#create-name", "Courses de la semaine");

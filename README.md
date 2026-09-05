@@ -1,4 +1,4 @@
-# Notre Liste de Courses
+# KoiKiManke
 
 Une liste de courses partagée en temps réel, à héberger entièrement sur
 Cloudflare (Workers + Durable Objects, sans base de données externe).

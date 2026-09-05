@@ -422,4 +422,69 @@ describe("applyMessage", () => {
       expect(state.history).toEqual([{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: NOW }]);
     });
   });
+
+  describe("restoreItems (annulation d'une suppression)", () => {
+    it("réinsère un article supprimé tel quel (id, order, checked d'origine)", () => {
+      const state = makeState();
+      const item = {
+        id: "i1",
+        name: "Lait",
+        quantity: "2 L",
+        categoryId: "cat-1",
+        checked: true,
+        order: 3,
+        createdAt: 111,
+        updatedAt: 222,
+      };
+      applyMessage(state, { type: "restoreItems", items: [item] }, NOW);
+      expect(state.items).toEqual([item]);
+    });
+
+    it("réinsère plusieurs articles à la fois (annulation de « vider les cochés »)", () => {
+      const state = makeState();
+      const items = [
+        { id: "i1", name: "A", quantity: "", categoryId: null, checked: true, order: 0, createdAt: 0, updatedAt: 0 },
+        { id: "i2", name: "B", quantity: "", categoryId: null, checked: true, order: 1, createdAt: 0, updatedAt: 0 },
+      ];
+      applyMessage(state, { type: "restoreItems", items }, NOW);
+      expect(state.items.map((i) => i.id)).toEqual(["i1", "i2"]);
+    });
+
+    it("ignore un article dont l'id existe déjà (idempotent)", () => {
+      const existing = { id: "i1", name: "Lait", quantity: "", categoryId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0 };
+      const state = makeState({ items: [existing] });
+      applyMessage(state, { type: "restoreItems", items: [{ ...existing, name: "Autre nom" }] }, NOW);
+      expect(state.items).toEqual([existing]);
+    });
+  });
+
+  describe("restoreCategory (annulation d'une suppression de catégorie)", () => {
+    it("recrée la catégorie et réassigne les articles encore sans catégorie", () => {
+      const state = makeState({
+        items: [{ id: "i1", name: "Pommes", quantity: "", categoryId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0 }],
+      });
+      const category = { id: "cat-1", name: "Fruits", order: 0 };
+      applyMessage(state, { type: "restoreCategory", category, itemIds: ["i1"] }, NOW);
+      expect(state.categories).toEqual([category]);
+      expect(state.items[0].categoryId).toBe("cat-1");
+    });
+
+    it("ne recrée pas la catégorie si elle existe déjà (idempotent)", () => {
+      const category = { id: "cat-1", name: "Fruits", order: 0 };
+      const state = makeState({ categories: [category] });
+      applyMessage(state, { type: "restoreCategory", category, itemIds: [] }, NOW);
+      expect(state.categories).toEqual([category]);
+    });
+
+    it("ne reprend pas un article que l'utilisateur a réassigné entre-temps", () => {
+      const state = makeState({
+        items: [{ id: "i1", name: "Pommes", quantity: "", categoryId: "cat-2", checked: false, order: 0, createdAt: 0, updatedAt: 0 }],
+      });
+      const category = { id: "cat-1", name: "Fruits", order: 0 };
+      applyMessage(state, { type: "restoreCategory", category, itemIds: ["i1"] }, NOW);
+      // L'article a été réassigné à "cat-2" pendant la fenêtre d'annulation :
+      // la restauration ne doit pas l'arracher à ce nouveau choix.
+      expect(state.items[0].categoryId).toBe("cat-2");
+    });
+  });
 });

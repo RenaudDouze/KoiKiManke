@@ -23,6 +23,19 @@ Cloudflare (Workers + Durable Objects, sans base de données externe).
   l'import.
 - **Hors-ligne minimal** : la dernière version connue de chaque liste est
   gardée en cache local, avec reconnexion automatique.
+- **Installable (PWA)** : manifest + service worker, s'ajoute à l'écran
+  d'accueil et se relance instantanément (shell mis en cache).
+- **Annulation** : supprimer un article/une catégorie ou vider les articles
+  cochés propose 5 secondes pour annuler, plutôt qu'une confirmation
+  bloquante.
+- **Thème clair/sombre/auto**, au choix (bouton dans le menu ⋮ et sur
+  l'accueil), en plus de la détection système par défaut.
+- **Recherche** rapide des articles par nom.
+- **Petite célébration** quand le dernier article est coché.
+- **Couleur automatique par catégorie** et icônes cohérentes (pas d'emoji
+  dépendants de la plateforme) pour une interface plus lisible.
+- **Accessibilité** : focus piégé et restauré dans les modales, navigation
+  clavier.
 
 ## Stack technique
 
@@ -31,7 +44,8 @@ Cloudflare (Workers + Durable Objects, sans base de données externe).
   (une instance par liste, stockage + diffusion WebSocket).
 - [Vite](https://vite.dev/) + [`@cloudflare/vite-plugin`](https://developers.cloudflare.com/workers/vite-plugin/)
   pour un dev loop unique (front + Worker tournent dans le même processus,
-  avec `workerd`).
+  avec `workerd`) + [`vite-plugin-pwa`](https://vite-pwa-org.netlify.app/)
+  pour le manifest/service worker.
 - TypeScript, sans framework front (DOM direct) pour rester léger.
 - [`qrcode`](https://www.npmjs.com/package/qrcode) pour générer les QR codes
   côté client.

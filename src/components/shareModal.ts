@@ -1,13 +1,15 @@
 import { renderQrSvg } from "./qr";
 import { escapeHtml } from "../lib/dom";
+import { icons } from "../lib/icons";
+import { trapFocus } from "../lib/focusTrap";
 
 export function openShareModal(code: string, listName: string): void {
   const url = `${location.origin}/l/${code}`;
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
-    <div class="modal share-modal" role="dialog" aria-modal="true">
-      <button class="icon-btn modal-close" aria-label="Fermer">✕</button>
+    <div class="modal share-modal" role="dialog" aria-modal="true" tabindex="-1">
+      <button class="icon-btn modal-close" aria-label="Fermer">${icons.close}</button>
       <h2>Partager « ${escapeHtml(listName)} »</h2>
       <div class="share-code" title="Code de la liste">${escapeHtml(code)}</div>
       <div class="qr-wrap" id="qr-wrap" aria-label="QR code de partage"></div>
@@ -26,9 +28,13 @@ export function openShareModal(code: string, listName: string): void {
     if (wrap) wrap.innerHTML = svg;
   });
 
+  const modal = overlay.querySelector(".modal") as HTMLElement;
+  const releaseFocusTrap = trapFocus(modal);
+
   function close() {
     overlay.remove();
     document.removeEventListener("keydown", onKeydown);
+    releaseFocusTrap();
   }
   function onKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") close();

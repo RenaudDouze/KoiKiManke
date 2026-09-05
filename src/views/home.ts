@@ -1,16 +1,24 @@
 import { createList, fetchListState } from "../lib/http";
 import { getRecentLists, forgetRecentList, touchRecentList } from "../lib/storage";
 import { escapeHtml } from "../lib/dom";
+import { icons } from "../lib/icons";
+import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
+
+const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
 export function mountHomeView(root: HTMLElement, navigate: (path: string) => void): () => void {
   render();
 
   function render(): void {
     const recents = getRecentLists();
+    const theme = getThemePreference();
     root.innerHTML = `
       <div class="home">
+        <button type="button" class="icon-btn theme-toggle" id="theme-toggle" aria-label="Thème : ${themeLabel(theme)}" title="Thème : ${themeLabel(theme)}">
+          ${THEME_ICON[theme]}
+        </button>
         <header class="home-header">
-          <div class="logo">🛒</div>
+          <div class="logo">${icons.cart}</div>
           <h1>Notre Liste de Courses</h1>
           <p class="tagline">Une liste de courses partagée, synchronisée en direct.</p>
         </header>
@@ -45,7 +53,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
                         <span class="recent-name">${escapeHtml(r.name)}</span>
                         <span class="recent-code">${r.code}</span>
                       </button>
-                      <button type="button" class="icon-btn recent-forget" data-code="${r.code}" aria-label="Oublier cette liste">✕</button>
+                      <button type="button" class="icon-btn recent-forget" data-code="${r.code}" aria-label="Oublier cette liste">${icons.close}</button>
                     </li>`,
                     )
                     .join("")}
@@ -55,6 +63,11 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
         }
       </div>
     `;
+
+    root.querySelector("#theme-toggle")?.addEventListener("click", () => {
+      cycleThemePreference();
+      render();
+    });
 
     root.querySelector("#create-form")?.addEventListener("submit", async (e) => {
       e.preventDefault();

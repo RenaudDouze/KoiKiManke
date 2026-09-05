@@ -169,5 +169,26 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       }
       return;
     }
+
+    case "restoreItems": {
+      const existingIds = new Set(state.items.map((i) => i.id));
+      for (const item of msg.items) {
+        if (!existingIds.has(item.id)) state.items.push(item);
+      }
+      return;
+    }
+
+    case "restoreCategory": {
+      if (!state.categories.some((c) => c.id === msg.category.id)) {
+        state.categories.push(msg.category);
+      }
+      const restoredIds = new Set(msg.itemIds);
+      for (const item of state.items) {
+        // Only reclaims items still uncategorized: if the user manually
+        // reassigned one elsewhere during the undo window, that choice wins.
+        if (restoredIds.has(item.id) && item.categoryId === null) item.categoryId = msg.category.id;
+      }
+      return;
+    }
   }
 }

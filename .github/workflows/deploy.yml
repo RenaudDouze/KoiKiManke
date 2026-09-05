@@ -30,7 +30,7 @@ jobs:
       # la vérification post-déploiement ci-dessous est sautée.
       url: ${{ vars.DEPLOY_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Le SHA exact qui a passé la CI, pas juste « la HEAD actuelle de
           # main » qui a pu bouger entre-temps si des pushes s'enchaînent.

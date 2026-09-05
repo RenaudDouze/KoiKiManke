@@ -118,6 +118,9 @@ button:focus-visible {
   font-size: 1.15rem;
   padding: 0.4em;
   border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
 }
 
@@ -128,10 +131,18 @@ button:focus-visible {
 /* ---------- Home ---------- */
 
 .home {
+  position: relative;
   padding: 1.5rem 1rem 3rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+.theme-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  font-size: 1.2rem;
 }
 
 .home-header {
@@ -295,10 +306,31 @@ button:focus-visible {
   background: var(--checked-bg);
 }
 
+.menu-item-icon {
+  display: inline-flex;
+  width: 1.1em;
+  vertical-align: -0.2em;
+  margin-right: 0.3em;
+  color: var(--text-muted);
+}
+
 .add-form {
   padding: 0.8rem;
   border-bottom: 1px solid var(--border);
   position: relative;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.search-bar input {
+  flex: 1;
+  min-width: 0;
 }
 
 .add-row {
@@ -332,6 +364,9 @@ button:focus-visible {
   padding-inline: 0.9rem;
   font-size: 1.2rem;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .suggestions {
@@ -427,6 +462,23 @@ button:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.category-dot {
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: hsl(var(--cat-hue) 65% 50%);
+}
+
+/* Léger accent de couleur par catégorie : bordure gauche + fond très
+   discret, mélangés avec la surface pour rester lisibles dans les deux
+   thèmes sans définir de variante sombre séparée. */
+.category-section.has-color .item-list {
+  border-left: 2px solid hsl(var(--cat-hue) 60% 55% / 0.5);
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+
 .drag-handle {
   background: none;
   border: none;
@@ -434,6 +486,9 @@ button:focus-visible {
   color: var(--text-muted);
   font-size: 1.1rem;
   padding: 0.3em 0.2em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   touch-action: none;
 }
 
@@ -674,6 +729,67 @@ button:focus-visible {
   z-index: 100;
   max-width: 90vw;
   text-align: center;
+}
+
+.undo-toast {
+  position: fixed;
+  bottom: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  padding: 0.6em 0.6em 0.6em 1.1em;
+  border-radius: 10px;
+  z-index: 100;
+  max-width: 90vw;
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  box-shadow: var(--shadow);
+}
+
+.undo-toast span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.undo-toast button {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--bg) 40%, transparent);
+  color: inherit;
+  border-radius: 8px;
+  padding: 0.4em 0.8em;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.undo-toast button:hover {
+  background: color-mix(in srgb, var(--bg) 15%, transparent);
+}
+
+.celebration-toast {
+  position: fixed;
+  top: 1.2rem;
+  left: 50%;
+  transform: translate(-50%, -10px) scale(0.9);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  padding: 0.8em 1.3em;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 100;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.celebration-toast.visible {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
 }
 
 .toast.visible {

@@ -52,7 +52,13 @@ export type ClientMessage =
   | { type: "renameCategory"; id: string; name: string }
   | { type: "deleteCategory"; id: string }
   | { type: "reorderCategories"; orderedIds: string[] }
-  | { type: "importState"; mode: "merge" | "replace"; data: Pick<ListState, "items" | "categories" | "history" | "name"> };
+  | { type: "importState"; mode: "merge" | "replace"; data: Pick<ListState, "items" | "categories" | "history" | "name"> }
+  // Compensating actions for the client-side undo stack (see src/views/list.ts):
+  // re-insert exactly what a previous deleteItem/clearChecked/deleteCategory
+  // removed, rather than re-deriving it (which would lose the original
+  // id/order/checked state).
+  | { type: "restoreItems"; items: Item[] }
+  | { type: "restoreCategory"; category: Category; itemIds: string[] };
 
 export type ServerMessage =
   | { type: "state"; state: ListState }

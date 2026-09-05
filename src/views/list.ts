@@ -9,6 +9,12 @@ import { startEdit } from "../lib/editable";
 import { enableDragReorder } from "../lib/dnd";
 import { openShareModal } from "../components/shareModal";
 import { exportListState, parseImportFile } from "../lib/importExport";
+import { icons } from "../lib/icons";
+import { trapFocus } from "../lib/focusTrap";
+import { categoryHue } from "../lib/color";
+import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
+
+const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
 export function mountListView(root: HTMLElement, code: string, navigate: (path: string) => void): () => void {
   let state: ListState | null = getCachedListState(code);
@@ -19,7 +25,70 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   let disposeItemDnd: (() => void) | null = null;
   let disposeCategoryDnd: (() => void) | null = null;
   let shellMounted = false;
+  let searchQuery = "";
+  // null = pas encore évalué (évite de célébrer à l'ouverture d'une liste
+  // déjà entièrement cochée) ; sinon, reflète l'état à la dernière vérification.
+  let wasFullyChecked: boolean | null = null;
   const conn = new ListConnection(code);
+
+  const UNDO_TIMEOUT_MS = 5000;
+  const MAX_UNDO_STACK = 10;
+  interface UndoEntry {
+    label: string;
+    undo: () => void;
+    timer: ReturnType<typeof setTimeout>;
+  }
+  let undoEntries: UndoEntry[] = [];
+
+  function pushUndo(label: string, undo: () => void): void {
+    const entry: UndoEntry = {
+      label,
+      undo,
+      timer: setTimeout(() => {
+        undoEntries = undoEntries.filter((e) => e !== entry);
+        renderUndoToast();
+      }, UNDO_TIMEOUT_MS),
+    };
+    undoEntries.push(entry);
+    if (undoEntries.length > MAX_UNDO_STACK) {
+      const removed = undoEntries.shift();
+      if (removed) clearTimeout(removed.timer);
+    }
+    renderUndoToast();
+  }
+
+  function undoLast(): void {
+    const entry = undoEntries.pop();
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    entry.undo();
+    renderUndoToast();
+  }
+
+  function clearUndoStack(): void {
+    for (const entry of undoEntries) clearTimeout(entry.timer);
+    undoEntries = [];
+    document.getElementById("undo-toast")?.remove();
+  }
+
+  function renderUndoToast(): void {
+    let el = document.getElementById("undo-toast");
+    if (undoEntries.length === 0) {
+      el?.remove();
+      return;
+    }
+    const last = undoEntries[undoEntries.length - 1];
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "undo-toast";
+      el.className = "undo-toast";
+      el.setAttribute("role", "status");
+      document.body.appendChild(el);
+    }
+    el.innerHTML = `<span></span><button type="button">Annuler${undoEntries.length > 1 ? ` (${undoEntries.length})` : ""}</button>`;
+    el.querySelector("span")!.textContent = last.label;
+    el.querySelector("button")!.addEventListener("click", undoLast);
+  }
 
   function onStateUpdate(next: ListState) {
     state = next;
@@ -95,6 +164,27 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     }
     renderCategories();
     renderQuickAdd();
+    checkCelebration();
+  }
+
+  function checkCelebration(): void {
+    if (!state) return;
+    const isFullyChecked = state.items.length > 0 && state.items.every((i) => i.checked);
+    if (wasFullyChecked !== null && isFullyChecked && !wasFullyChecked) celebrate();
+    wasFullyChecked = isFullyChecked;
+  }
+
+  function celebrate(): void {
+    const el = document.createElement("div");
+    el.className = "celebration-toast";
+    el.setAttribute("role", "status");
+    el.textContent = "🎉 Tout est dans le chariot !";
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add("visible"));
+    setTimeout(() => {
+      el.classList.remove("visible");
+      setTimeout(() => el.remove(), 300);
+    }, 2600);
   }
 
   function updateTitle(): void {
@@ -124,6 +214,29 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     root.querySelector("#btn-share")?.addEventListener("click", () => {
       if (state) openShareModal(state.code, state.name);
     });
+
+    const searchBar = root.querySelector("#search-bar") as HTMLElement | null;
+    const searchInput = root.querySelector("#search-input") as HTMLInputElement | null;
+    const closeSearch = () => {
+      if (searchBar) searchBar.hidden = true;
+      searchQuery = "";
+      if (searchInput) searchInput.value = "";
+      renderCategories();
+    };
+    root.querySelector("#btn-search")?.addEventListener("click", () => {
+      if (!searchBar) return;
+      searchBar.hidden = !searchBar.hidden;
+      if (!searchBar.hidden) searchInput?.focus();
+      else closeSearch();
+    });
+    root.querySelector("#search-close")?.addEventListener("click", closeSearch);
+    searchInput?.addEventListener("input", () => {
+      searchQuery = searchInput.value;
+      renderCategories();
+    });
+    searchInput?.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeSearch();
+    });
     const titleEl = root.querySelector("#list-title") as HTMLElement | null;
     titleEl?.addEventListener("click", () => {
       if (!state) return;
@@ -148,12 +261,19 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       if (panel) panel.hidden = true;
     });
 
+    panel?.querySelector('[data-action="theme"]')?.addEventListener("click", (e) => {
+      cycleThemePreference();
+      updateThemeMenuItem(e.currentTarget as HTMLElement);
+    });
     panel?.querySelector('[data-action="manage-categories"]')?.addEventListener("click", openCategoryManager);
     panel?.querySelector('[data-action="export"]')?.addEventListener("click", () => {
       if (state) exportListState(state);
     });
     panel?.querySelector('[data-action="clear-checked"]')?.addEventListener("click", () => {
+      const checkedItems = state?.items.filter((i) => i.checked) ?? [];
+      if (checkedItems.length === 0) return;
       conn.send({ type: "clearChecked" });
+      pushUndo(`${checkedItems.length} article(s) coché(s) vidé(s)`, () => conn.send({ type: "restoreItems", items: checkedItems }));
     });
 
     const fileInput = root.querySelector("#import-file") as HTMLInputElement | null;
@@ -175,8 +295,8 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     overlay.innerHTML = `
-      <div class="modal">
-        <button class="icon-btn modal-close" aria-label="Fermer">✕</button>
+      <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+        <button class="icon-btn modal-close" aria-label="Fermer">${icons.close}</button>
         <h2>Importer la liste</h2>
         <p>${data.items.length} article(s) et ${data.categories.length} catégorie(s) trouvés dans le fichier.</p>
         <div class="stacked-actions">
@@ -187,10 +307,21 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       </div>
     `;
     document.body.appendChild(overlay);
-    const close = () => overlay.remove();
+    const releaseFocusTrap = trapFocus(overlay.querySelector(".modal")!);
+    const close = () => {
+      overlay.remove();
+      releaseFocusTrap();
+    };
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) close();
     });
+    document.addEventListener("keydown", onImportKeydown);
+    function onImportKeydown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        document.removeEventListener("keydown", onImportKeydown);
+        close();
+      }
+    }
     overlay.querySelector(".modal-close")?.addEventListener("click", close);
     overlay.querySelector("#import-cancel")?.addEventListener("click", close);
     overlay.querySelector("#import-merge")?.addEventListener("click", () => {
@@ -211,17 +342,18 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     overlay.className = "modal-overlay";
     const render = () => {
       overlay.innerHTML = `
-        <div class="modal">
-          <button class="icon-btn modal-close" aria-label="Fermer">✕</button>
+        <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+          <button class="icon-btn modal-close" aria-label="Fermer">${icons.close}</button>
           <h2>Catégories</h2>
           <ul class="manage-category-list">
             ${[...state!.categories]
               .sort((a, b) => a.order - b.order)
               .map(
                 (c) => `
-              <li data-id="${c.id}">
+              <li data-id="${c.id}" style="--cat-hue: ${categoryHue(c.id)}">
+                <span class="category-dot" aria-hidden="true"></span>
                 <span class="cat-name" data-id="${c.id}">${escapeHtml(c.name)}</span>
-                <button class="icon-btn" data-action="del" data-id="${c.id}" aria-label="Supprimer">🗑</button>
+                <button class="icon-btn" data-action="del" data-id="${c.id}" aria-label="Supprimer">${icons.trash}</button>
               </li>`,
               )
               .join("")}
@@ -245,9 +377,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       });
       overlay.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
         btn.addEventListener("click", () => {
-          if (confirm("Supprimer cette catégorie ? Les articles seront déplacés vers « Sans catégorie ».")) {
-            conn.send({ type: "deleteCategory", id: btn.dataset.id! });
-          }
+          const id = btn.dataset.id!;
+          const category = state!.categories.find((c) => c.id === id);
+          if (!category) return;
+          const itemIds = state!.items.filter((i) => i.categoryId === id).map((i) => i.id);
+          conn.send({ type: "deleteCategory", id });
+          pushUndo(`Catégorie « ${category.name} » supprimée`, () => conn.send({ type: "restoreCategory", category, itemIds }));
         });
       });
       overlay.querySelector("#new-category-form")?.addEventListener("submit", (e) => {
@@ -262,13 +397,20 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     const close = () => {
       overlay.remove();
       unsubscribe();
+      releaseFocusTrap();
+      document.removeEventListener("keydown", onKeydown);
     };
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) close();
     });
+    document.addEventListener("keydown", onKeydown);
     const unsubscribe = conn.onState(() => render());
     document.body.appendChild(overlay);
     render();
+    const releaseFocusTrap = trapFocus(overlay);
   }
 
   function wireAddForm(): void {
@@ -373,18 +515,32 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     const container = root.querySelector("#categories") as HTMLElement | null;
     if (!container || !state) return;
 
-    const byCategory = (categoryId: string | null): Item[] => state!.items.filter((i) => i.categoryId === categoryId);
+    const query = searchQuery.trim().toLowerCase();
+    const byCategory = (categoryId: string | null): Item[] =>
+      state!.items.filter((i) => i.categoryId === categoryId && (!query || i.name.toLowerCase().includes(query)));
     const sortItems = (items: Item[]): Item[] =>
       [...items].sort((a, b) => Number(a.checked) - Number(b.checked) || a.order - b.order);
 
     const cats = [...state.categories].sort((a, b) => a.order - b.order);
     type Group = { id: string | null; name: string; items: Item[]; showHeader: boolean };
-    const groups: Group[] = cats.map((c) => ({ id: c.id, name: c.name, items: sortItems(byCategory(c.id)), showHeader: true }));
+    let groups: Group[] = cats.map((c) => ({ id: c.id, name: c.name, items: sortItems(byCategory(c.id)), showHeader: true }));
     const uncategorized = sortItems(byCategory(null));
     if (cats.length === 0) {
       groups.unshift({ id: null, name: "Articles", items: uncategorized, showHeader: false });
     } else if (uncategorized.length > 0) {
       groups.push({ id: null, name: "Sans catégorie", items: uncategorized, showHeader: true });
+    }
+
+    // En recherche, une catégorie sans résultat n'a rien à montrer — pas la
+    // peine de garder son en-tête visible. Sans recherche, on la garde
+    // (même vide) pour que l'utilisateur sache qu'elle existe.
+    if (query) groups = groups.filter((g) => g.items.length > 0);
+
+    if (groups.length === 0 && query) {
+      container.innerHTML = `<div class="empty-state">Aucun article ne correspond à « ${escapeHtml(searchQuery.trim())} ».</div>`;
+      disposeItemDnd?.();
+      disposeCategoryDnd?.();
+      return;
     }
 
     if (groups.every((g) => g.items.length === 0)) {
@@ -397,11 +553,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     container.innerHTML = groups
       .map(
         (g) => `
-      <section class="category-section" data-category-id="${g.id ?? ""}">
+      <section class="category-section${g.id ? " has-color" : ""}" data-category-id="${g.id ?? ""}" ${g.id ? `style="--cat-hue: ${categoryHue(g.id)}"` : ""}>
         ${
           g.showHeader
             ? `<header class="category-header">
-                ${g.id ? `<button class="drag-handle category-drag-handle" aria-label="Réordonner la catégorie">⠿</button>` : `<span class="drag-handle-spacer"></span>`}
+                ${g.id ? `<button class="drag-handle category-drag-handle" aria-label="Réordonner la catégorie">${icons.gripVertical}</button>` : `<span class="drag-handle-spacer"></span>`}
+                ${g.id ? `<span class="category-dot" aria-hidden="true"></span>` : ""}
                 <span class="category-name" data-id="${g.id ?? ""}">${escapeHtml(g.name)}</span>
                 <span class="category-count">${g.items.filter((i) => !i.checked).length}</span>
               </header>`
@@ -417,11 +574,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     container.querySelectorAll<HTMLInputElement>(".item-check").forEach((cb) => {
       cb.addEventListener("change", () => {
         conn.send({ type: "toggleItem", id: cb.dataset.id!, checked: cb.checked });
+        if (cb.checked) navigator.vibrate?.(10);
       });
     });
 
     container.querySelectorAll<HTMLElement>('[data-action="delete-item"]').forEach((btn) => {
-      btn.addEventListener("click", () => conn.send({ type: "deleteItem", id: btn.dataset.id! }));
+      btn.addEventListener("click", () => {
+        const item = state!.items.find((i) => i.id === btn.dataset.id);
+        if (!item) return;
+        conn.send({ type: "deleteItem", id: item.id });
+        pushUndo(`« ${item.name} » supprimé`, () => conn.send({ type: "restoreItems", items: [item] }));
+      });
     });
 
     container.querySelectorAll<HTMLElement>(".item-name").forEach((el) => {
@@ -498,11 +661,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   function itemRowHtml(item: Item): string {
     return `
       <li class="item ${item.checked ? "checked" : ""}" data-id="${item.id}">
-        <button class="drag-handle item-drag-handle" aria-label="Déplacer">⠿</button>
+        <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
         <input type="checkbox" class="item-check" data-id="${item.id}" ${item.checked ? "checked" : ""} />
         <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${item.id}">${escapeHtml(item.quantity) || "+"}</span>
         <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
-        <button class="icon-btn item-delete" data-action="delete-item" data-id="${item.id}" aria-label="Supprimer">✕</button>
+        <button class="icon-btn item-delete" data-action="delete-item" data-id="${item.id}" aria-label="Supprimer">${icons.trash}</button>
       </li>
     `;
   }
@@ -521,18 +684,25 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     return `
       <div class="list-view">
         <header class="list-header">
-          <button class="icon-btn" id="btn-home" aria-label="Accueil">←</button>
+          <button class="icon-btn" id="btn-home" aria-label="Accueil">${icons.back}</button>
           <h1 class="list-title" id="list-title">${escapeHtml(s.name)}</h1>
           <span class="conn-dot ${isConnected ? "online" : ""}" id="conn-dot" title="${isConnected ? "Synchronisé" : "Connexion…"}"></span>
-          <button class="icon-btn" id="btn-share" aria-label="Partager">🔗</button>
-          <button class="icon-btn" id="btn-menu" aria-label="Menu">⋮</button>
+          <button class="icon-btn" id="btn-search" aria-label="Rechercher">${icons.search}</button>
+          <button class="icon-btn" id="btn-share" aria-label="Partager">${icons.share}</button>
+          <button class="icon-btn" id="btn-menu" aria-label="Menu">${icons.more}</button>
           <div class="menu-panel" id="menu-panel" hidden>
+            <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
             <button type="button" data-action="manage-categories">Gérer les catégories</button>
             <button type="button" data-action="export">Exporter (JSON)</button>
             <button type="button" data-action="import">Importer…</button>
             <button type="button" data-action="clear-checked">Vider les articles cochés</button>
           </div>
         </header>
+
+        <div class="search-bar" id="search-bar" hidden>
+          <input id="search-input" type="text" aria-label="Rechercher un article" placeholder="Rechercher un article…" />
+          <button class="icon-btn" id="search-close" aria-label="Fermer la recherche">${icons.close}</button>
+        </div>
 
         <form id="add-form" class="add-form">
           <div class="add-row">
@@ -543,7 +713,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
             <select id="add-category" aria-label="Catégorie">
               ${categoryOptionsHtml(s.categories)}
             </select>
-            <button type="submit" class="btn primary add-submit" aria-label="Ajouter">+</button>
+            <button type="submit" class="btn primary add-submit" aria-label="Ajouter">${icons.plus}</button>
           </div>
           <ul id="suggestions" class="suggestions" hidden></ul>
         </form>
@@ -555,6 +725,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         <input type="file" id="import-file" accept="application/json" hidden />
       </div>
     `;
+  }
+
+  function themeMenuHtml(pref: ThemePreference): string {
+    return `<span class="menu-item-icon">${THEME_ICON[pref]}</span> Thème : ${themeLabel(pref)}`;
+  }
+
+  function updateThemeMenuItem(button: HTMLElement): void {
+    button.innerHTML = themeMenuHtml(getThemePreference());
   }
 
   function notFoundHtml(c: string): string {
@@ -582,6 +760,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     conn.disconnect();
     disposeItemDnd?.();
     disposeCategoryDnd?.();
+    clearUndoStack();
     document.querySelectorAll(".modal-overlay").forEach((el) => el.remove());
   };
 }

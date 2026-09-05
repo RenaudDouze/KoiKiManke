@@ -21,7 +21,14 @@ export default defineConfig({
     command: "npm run dev -- --port 5173 --strictPort",
     url: "http://127.0.0.1:5173",
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    // 60s was too tight on GitHub Actions' shared runners: cold `npm run
+    // dev` (Vite + the Cloudflare Worker environment via workerd) reliably
+    // took longer there than on a local machine, failing every run with
+    // "Timed out waiting ... from config.webServer" regardless of what the
+    // PR actually changed (confirmed: reproduced identically on plain
+    // GitHub Actions version bumps, and locally the same command starts
+    // well under 60s).
+    timeout: 120_000,
   },
   projects: [
     {

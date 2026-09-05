@@ -18,8 +18,8 @@ export default defineConfig({
       // le plugin Cloudflare gère un environment "worker" séparé que VitePWA
       // ne doit pas toucher.
       manifest: {
-        name: "Notre Liste de Courses",
-        short_name: "Courses",
+        name: "KoiKiManke",
+        short_name: "KoiKiManke",
         description: "Liste de courses partagée, synchronisée en temps réel.",
         lang: "fr",
         start_url: "/",

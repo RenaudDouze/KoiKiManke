@@ -68,11 +68,6 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
-        env:
-          # TEMPORARY: diagnosing a CI-only webServer startup timeout (see
-          # playwright.config.ts). Traces Playwright's own webServer
-          # lifecycle (spawn, polling attempts, availability checks).
-          DEBUG: pw:webserver
       - if: always()
         uses: actions/upload-artifact@v7
         with:

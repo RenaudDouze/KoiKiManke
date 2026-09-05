@@ -5,7 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       // See worker/test/cloudflareWorkersShim.ts.
-      "cloudflare:workers": path.resolve(__dirname, "worker/test/cloudflareWorkersShim.ts"),
+      "cloudflare:workers": path.resolve(import.meta.dirname, "worker/test/cloudflareWorkersShim.ts"),
     },
   },
   test: {

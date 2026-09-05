@@ -9,7 +9,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "resolveJsonModule": true,
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "types": ["vite/client"]
   },
   "include": ["src", "shared"]
 }

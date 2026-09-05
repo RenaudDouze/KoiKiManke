@@ -5,3 +5,6 @@ dist
 *.local
 .DS_Store
 .env
+coverage
+playwright-report
+test-results

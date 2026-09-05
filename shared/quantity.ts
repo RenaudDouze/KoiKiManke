@@ -66,15 +66,18 @@ export function parseFreeText(raw: string): ParsedEntry {
 
   const words = trimmed.split(" ");
 
-  // Two-word quantity at the start, e.g. "2 kg pommes".
-  if (words.length >= 3 && BARE_NUMBER.test(words[0]) && UNIT_WORD.test(words[1])) {
+  // Two-word quantity at the start, e.g. "2 kg pommes". `>= 2` (not `>= 3`)
+  // is intentional: "2 kg" alone should parse as quantity "2 kg" with an
+  // empty name (silently ignored by callers), not fall through to the
+  // single-token check below and get split into quantity "2" / name "kg".
+  if (words.length >= 2 && BARE_NUMBER.test(words[0]) && UNIT_WORD.test(words[1])) {
     return {
       quantity: normalizeUnit(words[0], words[1]),
       name: words.slice(2).join(" "),
     };
   }
   // Two-word quantity at the end, e.g. "pommes 2 kg".
-  if (words.length >= 3 && BARE_NUMBER.test(words[words.length - 2]) && UNIT_WORD.test(words[words.length - 1])) {
+  if (words.length >= 2 && BARE_NUMBER.test(words[words.length - 2]) && UNIT_WORD.test(words[words.length - 1])) {
     return {
       quantity: normalizeUnit(words[words.length - 2], words[words.length - 1]),
       name: words.slice(0, -2).join(" "),

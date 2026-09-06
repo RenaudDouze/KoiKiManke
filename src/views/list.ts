@@ -263,7 +263,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   function wireHeader(): void {
     root.querySelector("#btn-home")?.addEventListener("click", () => navigate("/"));
     root.querySelector("#btn-share")?.addEventListener("click", () => {
-      if (state) openShareModal(state.code, state.name);
+      if (!state) return;
+      openShareModal(state.code, state.name, {
+        onExport: () => {
+          if (state) exportListState(state);
+        },
+        onImportFile: handleImportFile,
+      });
     });
 
     const presenceBtn = root.querySelector("#btn-presence");
@@ -333,13 +339,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     });
     panel?.querySelector('[data-action="manage-categories"]')?.addEventListener("click", openCategoryManager);
     panel?.querySelector('[data-action="manage-suggestions"]')?.addEventListener("click", openSuggestionManager);
-    panel?.querySelector('[data-action="export"]')?.addEventListener("click", () => {
-      if (state) exportListState(state);
-    });
     const clearCheckedBtn = panel?.querySelector<HTMLButtonElement>('[data-action="clear-checked"]');
     if (clearCheckedBtn) {
       wireConfirmClick(clearCheckedBtn, {
         armedText: "Confirmer : tout vider ?",
+        labelEl: clearCheckedBtn.querySelector<HTMLElement>(".menu-item-label") ?? undefined,
         isDisabled: () => (state?.items.filter((i) => i.checked).length ?? 0) === 0,
         onConfirm: () => {
           const checkedItems = state?.items.filter((i) => i.checked) ?? [];
@@ -350,20 +354,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         },
       });
     }
+  }
 
-    const fileInput = root.querySelector("#import-file") as HTMLInputElement | null;
-    panel?.querySelector('[data-action="import"]')?.addEventListener("click", () => fileInput?.click());
-    fileInput?.addEventListener("change", async () => {
-      const file = fileInput.files?.[0];
-      fileInput.value = "";
-      if (!file) return;
-      try {
-        const data = await parseImportFile(file);
-        openImportModal(data);
-      } catch (err) {
-        showToast(err instanceof Error ? err.message : "Import impossible.");
-      }
-    });
+  async function handleImportFile(file: File): Promise<void> {
+    try {
+      const data = await parseImportFile(file);
+      openImportModal(data);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Import impossible.");
+    }
   }
 
   function openImportModal(data: Awaited<ReturnType<typeof parseImportFile>>): void {
@@ -975,11 +974,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <div class="menu-panel" id="menu-panel" hidden>
             <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
             <button type="button" data-action="item-sort">${itemSortMenuHtml(getItemSortPreference())}</button>
-            <button type="button" data-action="manage-categories">Gérer les catégories</button>
-            <button type="button" data-action="manage-suggestions">Gérer les suggestions</button>
-            <button type="button" data-action="export">Exporter (JSON)</button>
-            <button type="button" data-action="import">Importer…</button>
-            <button type="button" data-action="clear-checked">Vider les articles cochés</button>
+            <button type="button" data-action="manage-categories"><span class="menu-item-icon">${icons.tag}</span>Gérer les catégories</button>
+            <button type="button" data-action="manage-suggestions"><span class="menu-item-icon">${icons.history}</span>Gérer les suggestions</button>
+            <button type="button" data-action="clear-checked"><span class="menu-item-icon">${icons.checkCircle}</span><span class="menu-item-label">Vider les articles cochés</span></button>
           </div>
         </header>
 
@@ -1005,8 +1002,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         <div id="quick-add" class="quick-add"></div>
 
         <div id="categories" class="categories"></div>
-
-        <input type="file" id="import-file" accept="application/json" hidden />
       </div>
     `;
   }
@@ -1020,11 +1015,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function itemSortMenuHtml(pref: ReturnType<typeof getItemSortPreference>): string {
-    return `Tri des articles : ${itemSortLabel(pref)}`;
+    return `<span class="menu-item-icon">${icons.sort}</span>Tri des articles : ${itemSortLabel(pref)}`;
   }
 
   function updateItemSortMenuItem(button: HTMLElement): void {
-    button.textContent = itemSortMenuHtml(getItemSortPreference());
+    button.innerHTML = itemSortMenuHtml(getItemSortPreference());
   }
 
   function notFoundHtml(c: string): string {

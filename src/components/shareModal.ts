@@ -4,7 +4,12 @@ import { icons } from "../lib/icons";
 import { trapFocus } from "../lib/focusTrap";
 import { appPath } from "../lib/basePath";
 
-export function openShareModal(code: string, listName: string): void {
+export interface ShareModalActions {
+  onExport: () => void;
+  onImportFile: (file: File) => void;
+}
+
+export function openShareModal(code: string, listName: string, actions: ShareModalActions): void {
   const url = `${location.origin}${appPath(`/l/${code}`)}`;
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -20,6 +25,11 @@ export function openShareModal(code: string, listName: string): void {
         <button class="btn" id="copy-code">Copier le code</button>
         ${"share" in navigator ? '<button class="btn primary" id="native-share">Partager…</button>' : ""}
       </div>
+      <div class="share-actions share-io-actions">
+        <button class="btn" id="share-export"><span class="menu-item-icon">${icons.download}</span>Exporter (JSON)</button>
+        <button class="btn" id="share-import"><span class="menu-item-icon">${icons.upload}</span>Importer…</button>
+      </div>
+      <input type="file" id="share-import-file" accept="application/json" hidden />
     </div>
   `;
   document.body.appendChild(overlay);
@@ -61,6 +71,20 @@ export function openShareModal(code: string, listName: string): void {
     } catch {
       // user cancelled the share sheet, ignore
     }
+  });
+
+  overlay.querySelector("#share-export")?.addEventListener("click", () => {
+    close();
+    actions.onExport();
+  });
+  const importFileInput = overlay.querySelector("#share-import-file") as HTMLInputElement;
+  overlay.querySelector("#share-import")?.addEventListener("click", () => importFileInput.click());
+  importFileInput.addEventListener("change", () => {
+    const file = importFileInput.files?.[0];
+    importFileInput.value = "";
+    if (!file) return;
+    close();
+    actions.onImportFile(file);
   });
 }
 

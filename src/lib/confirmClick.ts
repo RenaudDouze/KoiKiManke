@@ -9,6 +9,10 @@ export interface ConfirmClickOptions {
   armedLabel?: string;
   /** Texte affiché une fois le bouton armé (boutons texte, ex: menu). */
   armedText?: string;
+  /** Élément dont le texte est basculé pour armedText, si le bouton a
+   * d'autres enfants (ex: une icône) à préserver plutôt qu'écraser via
+   * el.textContent. Par défaut, `el` lui-même. */
+  labelEl?: HTMLElement;
   timeoutMs?: number;
   /** Si vrai au moment du clic, ignore l'armement (l'action n'a rien à faire). */
   isDisabled?: () => boolean;
@@ -20,7 +24,8 @@ const DEFAULT_TIMEOUT_MS = 3000;
 export function wireConfirmClick(el: HTMLElement, opts: ConfirmClickOptions): void {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const originalLabel = el.getAttribute("aria-label");
-  const originalText = el.textContent;
+  const textTarget = opts.labelEl ?? el;
+  const originalText = textTarget.textContent;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   const disarm = (): void => {
@@ -28,7 +33,7 @@ export function wireConfirmClick(el: HTMLElement, opts: ConfirmClickOptions): vo
     timer = null;
     el.classList.remove("confirm-armed");
     if (originalLabel !== null) el.setAttribute("aria-label", originalLabel);
-    if (opts.armedText !== undefined) el.textContent = originalText;
+    if (opts.armedText !== undefined) textTarget.textContent = originalText;
   };
 
   el.addEventListener("click", (e) => {
@@ -42,7 +47,7 @@ export function wireConfirmClick(el: HTMLElement, opts: ConfirmClickOptions): vo
     }
     el.classList.add("confirm-armed");
     if (opts.armedLabel) el.setAttribute("aria-label", opts.armedLabel);
-    if (opts.armedText !== undefined) el.textContent = opts.armedText;
+    if (opts.armedText !== undefined) textTarget.textContent = opts.armedText;
     timer = setTimeout(disarm, timeoutMs);
   });
 }

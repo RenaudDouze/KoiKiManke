@@ -4,6 +4,9 @@ export interface Category {
   id: string;
   name: string;
   order: number;
+  /** Rayon proposé par défaut à la création de la liste (voir
+   * shared/defaultCategories.ts) — affiché à part dans les listes déroulantes. */
+  isDefault?: boolean;
 }
 
 export interface Item {

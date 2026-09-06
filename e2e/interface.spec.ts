@@ -136,13 +136,15 @@ test("ajouter un article depuis une suggestion dont la catégorie a été suppri
   await page.waitForURL(/\/l\//);
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
 
+  // "Bricolage" (plutôt que "Fruits") pour ne pas chevaucher le rayon par
+  // défaut "Fruits & Légumes" proposé à la création de toute nouvelle liste.
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
-  await page.fill("#new-category-name", "Fruits");
+  await page.fill("#new-category-name", "Bricolage");
   await page.click("#new-category-form button[type=submit]");
   await page.keyboard.press("Escape");
 
-  await page.selectOption("#add-category", { label: "Fruits" });
+  await page.selectOption("#add-category", { label: "Bricolage" });
   await page.fill("#add-input", "Pommes");
   await page.click(".add-submit");
   await page.locator(".item-check").check();
@@ -151,8 +153,9 @@ test("ajouter un article depuis une suggestion dont la catégorie a été suppri
 
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
-  await page.click('[data-action="del"]');
-  await page.click('[data-action="del"]');
+  const bricolageRow = page.locator(".manage-category-list li", { hasText: "Bricolage" });
+  await bricolageRow.locator('[data-action="del"]').click();
+  await bricolageRow.locator('[data-action="del"]').click();
   await page.keyboard.press("Escape");
 
   // La suggestion "Pommes" pointe encore vers la catégorie supprimée : sans
@@ -171,9 +174,11 @@ test("gérer les suggestions : renommer, changer de catégorie, supprimer puis a
   await page.waitForURL(/\/l\//);
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
 
+  // "Bricolage" (plutôt que "Fruits") pour ne pas chevaucher le rayon par
+  // défaut "Fruits & Légumes" proposé à la création de toute nouvelle liste.
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
-  await page.fill("#new-category-name", "Fruits");
+  await page.fill("#new-category-name", "Bricolage");
   await page.click("#new-category-form button[type=submit]");
   await page.keyboard.press("Escape");
 
@@ -186,12 +191,12 @@ test("gérer les suggestions : renommer, changer de catégorie, supprimer puis a
   await page.click('[data-action="manage-suggestions"]');
   await expect(page.locator(".suggestion-name")).toHaveText("Pommes");
 
-  // Renomme "Pommes" en "Poires" et lui assigne la catégorie "Fruits".
+  // Renomme "Pommes" en "Poires" et lui assigne la catégorie "Bricolage".
   await page.locator(".suggestion-name").click();
   await page.locator(".modal .inline-edit").fill("Poires");
   await page.keyboard.press("Enter");
   await expect(page.locator(".suggestion-name")).toHaveText("Poires");
-  await page.selectOption(".suggestion-category", { label: "Fruits" });
+  await page.selectOption(".suggestion-category", { label: "Bricolage" });
   await page.keyboard.press("Escape");
 
   // La suggestion mise à jour se retrouve dans les chips, catégorisée.
@@ -260,30 +265,36 @@ test("une catégorie sans article dans la liste reste gérable mais ne s'affiche
   await page.waitForURL(/\/l\//);
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
 
+  // "Bricolage"/"Papeterie" (plutôt que "Fruits"/"Légumes") pour ne pas
+  // chevaucher les rayons par défaut proposés à la création de toute
+  // nouvelle liste (dont "Fruits & Légumes").
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
-  await page.fill("#new-category-name", "Fruits");
+  await page.fill("#new-category-name", "Bricolage");
   await page.click("#new-category-form button[type=submit]");
-  await expect(page.locator(".manage-category-list li")).toHaveCount(1);
-  await page.fill("#new-category-name", "Légumes");
+  await expect(page.locator(".manage-category-list li", { hasText: "Bricolage" })).toHaveCount(1);
+  await page.fill("#new-category-name", "Papeterie");
   await page.click("#new-category-form button[type=submit]");
-  await expect(page.locator(".manage-category-list li")).toHaveCount(2);
+  await expect(page.locator(".manage-category-list li", { hasText: "Papeterie" })).toHaveCount(1);
   await page.keyboard.press("Escape");
 
-  // Un seul article, dans "Fruits" : "Légumes" n'a rien à montrer et ne
-  // doit pas encombrer la liste avec un en-tête vide.
-  await page.selectOption("#add-category", { label: "Fruits" });
+  // Un seul article, dans "Bricolage" : "Papeterie" (et les rayons par
+  // défaut, encore vides) n'ont rien à montrer et ne doivent pas encombrer
+  // la liste avec un en-tête vide.
+  await page.selectOption("#add-category", { label: "Bricolage" });
   await page.fill("#add-input", "Pommes");
   await page.click(".add-submit");
 
-  await expect(page.locator(".category-name")).toHaveText(["Fruits"]);
+  await expect(page.locator(".category-name")).toHaveText(["Bricolage"]);
   await expect(page.locator(".category-section")).toHaveCount(1);
 
-  // Les deux catégories restent proposables/gérables ailleurs.
-  await expect(page.locator("#add-category option")).toHaveText(["Sans catégorie", "Fruits", "Légumes"]);
+  // Les deux catégories personnalisées restent proposables/gérables
+  // ailleurs, groupées à part des rayons par défaut.
+  await expect(page.locator('#add-category optgroup[label="Mes catégories"] option')).toHaveText(["Bricolage", "Papeterie"]);
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
-  await expect(page.locator(".cat-name")).toHaveText(["Fruits", "Légumes"]);
+  await expect(page.locator(".cat-name", { hasText: "Bricolage" })).toHaveCount(1);
+  await expect(page.locator(".cat-name", { hasText: "Papeterie" })).toHaveCount(1);
 });
 
 test("« Vider les articles cochés » demande aussi un second clic au même endroit", async ({ page }) => {
@@ -312,4 +323,50 @@ test("« Vider les articles cochés » demande aussi un second clic au même end
 
   await page.click("#undo-toast button");
   await expect(page.locator(".item .item-name")).toHaveText("Pommes");
+});
+
+test("une nouvelle liste propose des rayons par défaut, groupés à part des catégories personnalisées", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  // Les rayons par défaut apparaissent d'emblée, groupés sous "Rayons",
+  // dans le sélecteur de catégorie du formulaire d'ajout.
+  const rayonsGroup = page.locator('#add-category optgroup[label="Rayons"]');
+  await expect(rayonsGroup.locator("option")).toHaveText([
+    "Fruits & Légumes",
+    "Boucherie & Poissonnerie",
+    "Crèmerie",
+    "Boulangerie & Pâtisserie",
+    "Épicerie salée",
+    "Épicerie sucrée",
+    "Surgelés",
+    "Boissons",
+    "Hygiène & Beauté",
+    "Entretien & Maison",
+    "Bébé",
+    "Animalerie",
+  ]);
+  // Pas de groupe "Mes catégories" tant qu'aucune n'a été ajoutée.
+  await expect(page.locator('#add-category optgroup[label="Mes catégories"]')).toHaveCount(0);
+
+  // Sans article, ils restent listés (gérables) mais n'encombrent pas la
+  // liste elle-même.
+  await expect(page.locator(".category-section")).toHaveCount(0);
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await expect(page.locator(".manage-category-list li")).toHaveCount(12);
+  await page.keyboard.press("Escape");
+
+  // Une catégorie personnalisée ajoutée ensuite rejoint son propre groupe,
+  // distinct des rayons par défaut.
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.fill("#new-category-name", "Bricolage");
+  await page.click("#new-category-form button[type=submit]");
+  await page.keyboard.press("Escape");
+
+  await expect(page.locator('#add-category optgroup[label="Rayons"] option')).toHaveCount(12);
+  await expect(page.locator('#add-category optgroup[label="Mes catégories"] option')).toHaveText(["Bricolage"]);
 });

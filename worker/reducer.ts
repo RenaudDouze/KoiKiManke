@@ -15,6 +15,14 @@ export function nextOrder(list: { order: number }[]): number {
   return list.length === 0 ? 0 : Math.max(...list.map((x) => x.order)) + 1;
 }
 
+/** A category id only survives if it still names a real category — never
+ * trust one carried over from history or an import, since its category may
+ * since have been deleted (or, for an import, never existed in this list). */
+export function validCategoryId(state: ListState, id: string | null): string | null {
+  if (id === null) return null;
+  return state.categories.some((c) => c.id === id) ? id : null;
+}
+
 export function touchHistory(state: ListState, label: string, categoryId: string | null, now: number = Date.now()): void {
   const key = historyKey(label);
   if (!key) return;
@@ -52,14 +60,13 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
         id: msg.id,
         name,
         quantity,
-        categoryId: msg.categoryId,
+        categoryId: validCategoryId(state, msg.categoryId),
         checked: false,
         order: nextOrder(state.items),
         createdAt: now,
         updatedAt: now,
       };
       state.items.push(item);
-      touchHistory(state, name, msg.categoryId, now);
       return;
     }
 
@@ -68,7 +75,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       if (!item) return;
       if (msg.name !== undefined) item.name = msg.name;
       if (msg.quantity !== undefined) item.quantity = msg.quantity;
-      if (msg.categoryId !== undefined) item.categoryId = msg.categoryId;
+      if (msg.categoryId !== undefined) item.categoryId = validCategoryId(state, msg.categoryId);
       item.updatedAt = now;
       return;
     }
@@ -76,8 +83,13 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
     case "toggleItem": {
       const item = state.items.find((i) => i.id === msg.id);
       if (!item) return;
+      const wasChecked = item.checked;
       item.checked = msg.checked;
       item.updatedAt = now;
+      // La suggestion (historique) ne se retient qu'à la coche, pas à
+      // l'ajout : un article ajouté puis supprimé sans avoir servi ne doit
+      // pas polluer les suggestions futures.
+      if (msg.checked && !wasChecked) touchHistory(state, item.name, item.categoryId, now);
       return;
     }
 
@@ -120,6 +132,9 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       state.categories = state.categories.filter((c) => c.id !== msg.id);
       for (const item of state.items) {
         if (item.categoryId === msg.id) item.categoryId = null;
+      }
+      for (const entry of state.history) {
+        if (entry.categoryId === msg.id) entry.categoryId = null;
       }
       return;
     }
@@ -164,7 +179,8 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
           });
         }
         for (const entry of msg.data.history) {
-          touchHistory(state, entry.label, entry.categoryId, now);
+          const mappedCategoryId = entry.categoryId ? (categoryIdMap.get(entry.categoryId) ?? null) : null;
+          touchHistory(state, entry.label, mappedCategoryId, now);
         }
       }
       return;

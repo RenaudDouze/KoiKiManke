@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { ListState, ClientMessage, ServerMessage } from "../shared/types";
 import { applyMessage } from "./reducer";
+import { buildDefaultCategories } from "../shared/defaultCategories";
 
 interface Env {
   LIST_ROOM: DurableObjectNamespace<ListRoom>;
@@ -42,7 +43,7 @@ export class ListRoom extends DurableObject<Env> {
           code: body.code,
           name: (body.name || "Liste de courses").trim() || "Liste de courses",
           items: [],
-          categories: [],
+          categories: buildDefaultCategories(() => crypto.randomUUID()),
           history: [],
           createdAt: now,
           updatedAt: now,

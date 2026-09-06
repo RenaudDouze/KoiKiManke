@@ -22,18 +22,20 @@ test("parcours complet : créer, ajouter avec quantité, catégoriser, cocher, p
   await page.click(".add-submit");
   await expect(page.locator(".item")).toHaveCount(2);
 
-  // Catégories : création, puis assignation via le sélecteur du formulaire
+  // Catégories : création, puis assignation via le sélecteur du formulaire.
+  // "Bricolage" (plutôt que "Fruits") pour ne pas chevaucher le rayon par
+  // défaut "Fruits & Légumes" proposé à la création de toute nouvelle liste.
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
-  await page.fill("#new-category-name", "Fruits");
+  await page.fill("#new-category-name", "Bricolage");
   await page.click("#new-category-form button[type=submit]");
   await page.click(".modal-close");
-  await page.selectOption("#add-category", { label: "Fruits" });
+  await page.selectOption("#add-category", { label: "Bricolage" });
   await page.fill("#add-input", "Bananes");
   await page.click(".add-submit");
 
-  const fruitsSection = page.locator(".category-section", { has: page.locator(".category-name", { hasText: "Fruits" }) });
-  await expect(fruitsSection.locator(".item-name")).toHaveText(["Bananes"]);
+  const bricolageSection = page.locator(".category-section", { has: page.locator(".category-name", { hasText: "Bricolage" }) });
+  await expect(bricolageSection.locator(".item-name")).toHaveText(["Bananes"]);
 
   // Cocher un article le fait basculer visuellement
   await page.locator(".item", { has: page.locator(".item-name", { hasText: "Lait" }) }).locator(".item-check").check();

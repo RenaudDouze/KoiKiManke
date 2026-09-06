@@ -815,13 +815,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function categoryOptionsHtml(categories: Category[], selectedId: string | null = null): string {
-    return [`<option value="" ${selectedId === null ? "selected" : ""}>Sans catégorie</option>`]
-      .concat(
-        [...categories]
-          .sort((a, b) => a.order - b.order)
-          .map((c) => `<option value="${c.id}" ${c.id === selectedId ? "selected" : ""}>${escapeHtml(c.name)}</option>`),
-      )
-      .join("");
+    const sorted = [...categories].sort((a, b) => a.order - b.order);
+    const defaults = sorted.filter((c) => c.isDefault);
+    const custom = sorted.filter((c) => !c.isDefault);
+    const optionHtml = (c: Category) => `<option value="${c.id}" ${c.id === selectedId ? "selected" : ""}>${escapeHtml(c.name)}</option>`;
+    // Les rayons par défaut (voir shared/defaultCategories.ts) sont
+    // distingués visuellement des catégories ajoutées par l'utilisateur.
+    return [
+      `<option value="" ${selectedId === null ? "selected" : ""}>Sans catégorie</option>`,
+      defaults.length ? `<optgroup label="Rayons">${defaults.map(optionHtml).join("")}</optgroup>` : "",
+      custom.length ? `<optgroup label="Mes catégories">${custom.map(optionHtml).join("")}</optgroup>` : "",
+    ].join("");
   }
 
   function layoutHtml(s: ListState, isConnected: boolean): string {

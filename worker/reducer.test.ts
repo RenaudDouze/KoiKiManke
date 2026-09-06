@@ -38,7 +38,7 @@ describe("validCategoryId", () => {
   });
 
   it("retourne l'id si la catégorie existe", () => {
-    const state = makeState({ categories: [{ id: "c1", name: "Fruits" }] });
+    const state = makeState({ categories: [{ id: "c1", name: "Fruits", order: 0 }] });
     expect(validCategoryId(state, "c1")).toBe("c1");
   });
 
@@ -136,7 +136,7 @@ describe("applyMessage", () => {
 
   describe("addItem", () => {
     it("ajoute un article avec quantité extraite, sans toucher l'historique", () => {
-      const state = makeState({ categories: [{ id: "cat-1", name: "Fruits" }] });
+      const state = makeState({ categories: [{ id: "cat-1", name: "Fruits", order: 0 }] });
       applyMessage(state, { type: "addItem", id: "i1", rawText: "2 kg pommes", categoryId: "cat-1" }, NOW);
       expect(state.items).toEqual([
         {
@@ -297,11 +297,11 @@ describe("applyMessage", () => {
       const state = makeState();
       applyMessage(state, { type: "addCategory", id: "c1", name: "Fruits" }, NOW);
       applyMessage(state, { type: "addCategory", id: "c2", name: "  " }, NOW);
-      expect(state.categories).toEqual([{ id: "c1", name: "Fruits" }]);
+      expect(state.categories).toEqual([{ id: "c1", name: "Fruits", order: 0 }]);
     });
 
     it("renameCategory renomme, ignore id inconnu et nom blanc", () => {
-      const state = makeState({ categories: [{ id: "c1", name: "Fruits" }] });
+      const state = makeState({ categories: [{ id: "c1", name: "Fruits", order: 0 }] });
       applyMessage(state, { type: "renameCategory", id: "c1", name: "Légumes" }, NOW);
       expect(state.categories[0].name).toBe("Légumes");
       applyMessage(state, { type: "renameCategory", id: "c1", name: "  " }, NOW);
@@ -312,7 +312,7 @@ describe("applyMessage", () => {
 
     it("deleteCategory retire la catégorie, déplace ses articles vers null, nettoie l'historique, laisse le reste intact", () => {
       const state = makeState({
-        categories: [{ id: "c1", name: "Fruits" }],
+        categories: [{ id: "c1", name: "Fruits", order: 0 }],
         items: [
           { id: "i1", name: "Pommes", quantity: "", categoryId: "c1", checked: false, order: 0, createdAt: 0, updatedAt: 0 },
           { id: "i2", name: "Lait", quantity: "", categoryId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0 },
@@ -333,6 +333,20 @@ describe("applyMessage", () => {
       expect(state.history.find((h) => h.key === "pommes")!.categoryId).toBeNull();
       expect(state.history.find((h) => h.key === "lait")!.categoryId).toBeNull();
     });
+
+    it("reorderCategories réassigne order, laisse inchangée une catégorie absente de orderedIds", () => {
+      const state = makeState({
+        categories: [
+          { id: "c1", name: "A", order: 0 },
+          { id: "c2", name: "B", order: 1 },
+          { id: "c3", name: "C", order: 9 },
+        ],
+      });
+      applyMessage(state, { type: "reorderCategories", orderedIds: ["c2", "c1"] }, NOW);
+      expect(state.categories.find((c) => c.id === "c1")!.order).toBe(1);
+      expect(state.categories.find((c) => c.id === "c2")!.order).toBe(0);
+      expect(state.categories.find((c) => c.id === "c3")!.order).toBe(9);
+    });
   });
 
   describe("importState", () => {
@@ -340,13 +354,13 @@ describe("applyMessage", () => {
       const state = makeState({
         name: "Ancienne",
         items: [{ id: "old", name: "Old", quantity: "", categoryId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0 }],
-        categories: [{ id: "oldc", name: "OldCat" }],
+        categories: [{ id: "oldc", name: "OldCat", order: 0 }],
         history: [{ key: "old", label: "Old", categoryId: null, useCount: 1, lastUsed: 0 }],
       });
       const data = {
         name: "Nouvelle",
         items: [{ id: "new", name: "New", quantity: "", categoryId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0 }],
-        categories: [{ id: "newc", name: "NewCat" }],
+        categories: [{ id: "newc", name: "NewCat", order: 0 }],
         history: [{ key: "new", label: "New", categoryId: null, useCount: 1, lastUsed: 0 }],
       };
       applyMessage(state, { type: "importState", mode: "replace", data }, NOW);
@@ -367,7 +381,7 @@ describe("applyMessage", () => {
     });
 
     it("mode merge fusionne les catégories par nom (insensible à la casse) sans dupliquer", () => {
-      const state = makeState({ categories: [{ id: "existing", name: "Fruits" }] });
+      const state = makeState({ categories: [{ id: "existing", name: "Fruits", order: 0 }] });
       applyMessage(
         state,
         {
@@ -377,8 +391,8 @@ describe("applyMessage", () => {
             name: "",
             items: [],
             categories: [
-              { id: "imported-fruits", name: "fruits" },
-              { id: "imported-legumes", name: "Légumes" },
+              { id: "imported-fruits", name: "fruits", order: 0 },
+              { id: "imported-legumes", name: "Légumes", order: 1 },
             ],
             history: [],
           },
@@ -415,7 +429,7 @@ describe("applyMessage", () => {
                 updatedAt: 0,
               },
             ],
-            categories: [{ id: "imported-cat", name: "Fruits" }],
+            categories: [{ id: "imported-cat", name: "Fruits", order: 0 }],
             history: [],
           },
         },
@@ -488,7 +502,7 @@ describe("applyMessage", () => {
           data: {
             name: "",
             items: [],
-            categories: [{ id: "imported-cat", name: "Fruits" }],
+            categories: [{ id: "imported-cat", name: "Fruits", order: 0 }],
             history: [{ key: "pommes", label: "Pommes", categoryId: "imported-cat", useCount: 3, lastUsed: 0 }],
           },
         },
@@ -553,7 +567,7 @@ describe("applyMessage", () => {
 
       it("change la catégorie", () => {
         const state = makeState({
-          categories: [{ id: "c1", name: "Fruits" }],
+          categories: [{ id: "c1", name: "Fruits", order: 0 }],
           history: [{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 }],
         });
         applyMessage(state, { type: "updateHistoryEntry", key: "lait", categoryId: "c1" }, NOW);
@@ -647,14 +661,14 @@ describe("applyMessage", () => {
       const state = makeState({
         items: [{ id: "i1", name: "Pommes", quantity: "", categoryId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0 }],
       });
-      const category = { id: "cat-1", name: "Fruits" };
+      const category = { id: "cat-1", name: "Fruits", order: 0 };
       applyMessage(state, { type: "restoreCategory", category, itemIds: ["i1"] }, NOW);
       expect(state.categories).toEqual([category]);
       expect(state.items[0].categoryId).toBe("cat-1");
     });
 
     it("ne recrée pas la catégorie si elle existe déjà (idempotent)", () => {
-      const category = { id: "cat-1", name: "Fruits" };
+      const category = { id: "cat-1", name: "Fruits", order: 0 };
       const state = makeState({ categories: [category] });
       applyMessage(state, { type: "restoreCategory", category, itemIds: [] }, NOW);
       expect(state.categories).toEqual([category]);
@@ -664,7 +678,7 @@ describe("applyMessage", () => {
       const state = makeState({
         items: [{ id: "i1", name: "Pommes", quantity: "", categoryId: "cat-2", checked: false, order: 0, createdAt: 0, updatedAt: 0 }],
       });
-      const category = { id: "cat-1", name: "Fruits" };
+      const category = { id: "cat-1", name: "Fruits", order: 0 };
       applyMessage(state, { type: "restoreCategory", category, itemIds: ["i1"] }, NOW);
       // L'article a été réassigné à "cat-2" pendant la fenêtre d'annulation :
       // la restauration ne doit pas l'arracher à ce nouveau choix.

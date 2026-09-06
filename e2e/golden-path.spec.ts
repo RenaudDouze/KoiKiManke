@@ -23,8 +23,6 @@ test("parcours complet : créer, ajouter avec quantité, catégoriser, cocher, p
   await expect(page.locator(".item")).toHaveCount(2);
 
   // Catégories : création, puis assignation via le sélecteur du formulaire.
-  // "Bricolage" (plutôt que "Fruits") pour ne pas chevaucher le rayon par
-  // défaut "Fruits & Légumes" proposé à la création de toute nouvelle liste.
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
   await page.fill("#new-category-name", "Bricolage");

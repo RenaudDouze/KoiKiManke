@@ -3,9 +3,7 @@
 export interface Category {
   id: string;
   name: string;
-  /** Rayon proposé par défaut à la création de la liste (voir
-   * shared/defaultCategories.ts) — affiché à part dans les listes déroulantes. */
-  isDefault?: boolean;
+  order: number;
 }
 
 export interface Item {
@@ -41,10 +39,6 @@ export interface ListState {
   history: HistoryEntry[];
   createdAt: number;
   updatedAt: number;
-  /** True once the default "rayons" have been seeded into this list (at
-   * creation, or via a one-off migration for lists that predate them) —
-   * prevents re-adding them after a user deletes them. */
-  defaultCategoriesSeeded?: boolean;
 }
 
 export type ClientMessage =
@@ -59,6 +53,7 @@ export type ClientMessage =
   | { type: "addCategory"; id: string; name: string }
   | { type: "renameCategory"; id: string; name: string }
   | { type: "deleteCategory"; id: string }
+  | { type: "reorderCategories"; orderedIds: string[] }
   | { type: "importState"; mode: "merge" | "replace"; data: Pick<ListState, "items" | "categories" | "history" | "name"> }
   | { type: "deleteHistoryEntry"; key: string }
   | { type: "updateHistoryEntry"; key: string; label?: string; categoryId?: string | null }

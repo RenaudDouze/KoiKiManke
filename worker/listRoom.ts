@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { ListState, ClientMessage, ServerMessage } from "../shared/types";
 import { applyMessage } from "./reducer";
-import { buildDefaultCategories } from "../shared/defaultCategories";
+import { buildDefaultCategories, seedMissingDefaultCategories } from "../shared/defaultCategories";
 
 interface Env {
   LIST_ROOM: DurableObjectNamespace<ListRoom>;
@@ -17,6 +17,10 @@ export class ListRoom extends DurableObject<Env> {
     if (this.loaded) return;
     this.listState = (await this.ctx.storage.get<ListState>(STORAGE_KEY)) ?? null;
     this.loaded = true;
+    if (this.listState && !this.listState.defaultCategoriesSeeded) {
+      seedMissingDefaultCategories(this.listState, () => crypto.randomUUID());
+      await this.persist();
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -47,6 +51,7 @@ export class ListRoom extends DurableObject<Env> {
           history: [],
           createdAt: now,
           updatedAt: now,
+          defaultCategoriesSeeded: true,
         };
         await this.persist();
       }

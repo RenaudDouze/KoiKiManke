@@ -42,6 +42,10 @@ export interface ListState {
   history: HistoryEntry[];
   createdAt: number;
   updatedAt: number;
+  /** True once the default "rayons" have been seeded into this list (at
+   * creation, or via a one-off migration for lists that predate them) —
+   * prevents re-adding them after a user deletes them. */
+  defaultCategoriesSeeded?: boolean;
 }
 
 export type ClientMessage =

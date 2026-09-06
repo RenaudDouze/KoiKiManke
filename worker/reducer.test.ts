@@ -91,6 +91,26 @@ describe("touchHistory", () => {
     expect(state.history.some((h) => h.key === "item-0")).toBe(false);
     expect(state.history.some((h) => h.key === "nouveau")).toBe(true);
   });
+
+  it("n'évince jamais une entrée favorite, même la plus ancienne", () => {
+    const history = [
+      { key: "favori", label: "Favori", categoryId: null, useCount: 1, lastUsed: 0, favorite: true },
+      ...Array.from({ length: MAX_HISTORY - 1 }, (_, i) => ({
+        key: `item-${i}`,
+        label: `item-${i}`,
+        categoryId: null,
+        useCount: 1,
+        lastUsed: i + 1,
+      })),
+    ];
+    const state = makeState({ history });
+    touchHistory(state, "nouveau", null, NOW);
+    expect(state.history.length).toBe(MAX_HISTORY);
+    expect(state.history.some((h) => h.key === "favori")).toBe(true);
+    // La plus ancienne des non-favorites (item-0) est évincée à la place.
+    expect(state.history.some((h) => h.key === "item-0")).toBe(false);
+    expect(state.history.some((h) => h.key === "nouveau")).toBe(true);
+  });
 });
 
 describe("applyMessage", () => {
@@ -581,6 +601,22 @@ describe("applyMessage", () => {
         });
         applyMessage(state, { type: "updateHistoryEntry", key: "pome", label: "Pommes" }, NOW);
         expect(state.history).toEqual([{ key: "pommes", label: "Pommes", categoryId: "c1", useCount: 5, lastUsed: 100 }]);
+      });
+    });
+
+    describe("toggleFavoriteHistoryEntry", () => {
+      it("bascule le statut favori", () => {
+        const state = makeState({ history: [{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 }] });
+        applyMessage(state, { type: "toggleFavoriteHistoryEntry", key: "lait" }, NOW);
+        expect(state.history[0].favorite).toBe(true);
+        applyMessage(state, { type: "toggleFavoriteHistoryEntry", key: "lait" }, NOW);
+        expect(state.history[0].favorite).toBe(false);
+      });
+
+      it("ignore une clé inconnue", () => {
+        const state = makeState({ history: [{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 }] });
+        applyMessage(state, { type: "toggleFavoriteHistoryEntry", key: "nope" }, NOW);
+        expect(state.history[0].favorite).toBeUndefined();
       });
     });
   });

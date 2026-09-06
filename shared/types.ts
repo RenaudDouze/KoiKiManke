@@ -27,6 +27,8 @@ export interface HistoryEntry {
   categoryId: string | null;
   useCount: number;
   lastUsed: number;
+  /** Exempts the entry from the MAX_HISTORY eviction (see worker/reducer.ts). */
+  favorite?: boolean;
 }
 
 export interface ListState {
@@ -55,6 +57,7 @@ export type ClientMessage =
   | { type: "importState"; mode: "merge" | "replace"; data: Pick<ListState, "items" | "categories" | "history" | "name"> }
   | { type: "deleteHistoryEntry"; key: string }
   | { type: "updateHistoryEntry"; key: string; label?: string; categoryId?: string | null }
+  | { type: "toggleFavoriteHistoryEntry"; key: string }
   // Compensating actions for the client-side undo stack (see src/views/list.ts):
   // re-insert exactly what a previous deleteItem/clearChecked/deleteCategory/
   // deleteHistoryEntry removed, rather than re-deriving it (which would lose

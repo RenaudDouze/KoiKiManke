@@ -204,3 +204,41 @@ test("gérer les suggestions : renommer, changer de catégorie, supprimer puis a
   await page.click('[data-action="manage-suggestions"]');
   await expect(page.locator(".suggestion-name")).toHaveText("Poires");
 });
+
+test("gestion des suggestions : recherche et favoris", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  for (const name of ["Pommes", "Poires", "Lait"]) {
+    await page.fill("#add-input", name);
+    await page.click(".add-submit");
+  }
+  // Coche un article à la fois via ":not(:checked)" plutôt que par index :
+  // cocher réordonne la liste (les cochés passent en fin), donc des index
+  // fixes ("nth(1)", "nth(2)") finiraient par cibler le mauvais article.
+  for (let i = 0; i < 3; i++) {
+    await page.locator(".item-check:not(:checked)").first().check();
+  }
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-suggestions"]');
+  await expect(page.locator("#suggestion-list li")).toHaveCount(3);
+
+  // Marque "Lait" comme favori : bascule dans une sous-section dédiée.
+  await page.locator("#suggestion-list li", { hasText: "Lait" }).locator(".suggestion-favorite").click();
+  await expect(page.locator(".recent-subheading")).toHaveText(["Favoris", "Autres"]);
+  await expect(page.locator("#suggestion-list ul").first().locator(".suggestion-name")).toHaveText("Lait");
+
+  // La recherche filtre par nom (triées par coche la plus récente d'abord :
+  // "Poires" a été cochée après "Pommes").
+  await page.fill("#suggestion-search", "po");
+  await expect(page.locator(".suggestion-name")).toHaveText(["Poires", "Pommes"]);
+
+  await page.fill("#suggestion-search", "introuvable");
+  await expect(page.locator("#suggestion-list .hint")).toContainText("Aucune suggestion ne correspond");
+
+  await page.fill("#suggestion-search", "");
+  await expect(page.locator("#suggestion-list li")).toHaveCount(3);
+});

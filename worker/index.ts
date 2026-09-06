@@ -24,16 +24,31 @@ function normalizeCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
+// Autorise l'appel depuis une origine différente (client servi par GitHub
+// Pages, Worker sur un domaine *.workers.dev distinct) : sans ces en-têtes,
+// le navigateur bloquerait les requêtes JSON avant même qu'elles partent.
+// Sans objet pour la connexion WebSocket (jamais soumise au CORS/preflight
+// par les navigateurs), donc pas ajoutés sur cette route.
+const CORS_HEADERS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+};
+
 async function jsonPassthrough(res: Response): Promise<Response> {
   return new Response(res.body, {
     status: res.status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...CORS_HEADERS },
   });
 }
 
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/") && request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
 
     if (url.pathname === "/api/lists" && request.method === "POST") {
       const body = await request
@@ -76,7 +91,7 @@ export default {
     }
 
     if (url.pathname.startsWith("/api/")) {
-      return new Response("Not found", { status: 404 });
+      return new Response("Not found", { status: 404, headers: CORS_HEADERS });
     }
 
     return env.ASSETS.fetch(request);

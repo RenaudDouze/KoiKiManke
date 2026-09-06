@@ -71,6 +71,21 @@ prête à l'emploi dans `dist/`) puis déploie avec `wrangler deploy`. Il faut
 être connecté à un compte Cloudflare (`npx wrangler login` la première
 fois).
 
+## Déployer sur GitHub Pages
+
+L'app est aussi accessible via une URL `github.io`, en plus de l'URL
+Cloudflare Workers : le client est alors servi par GitHub Pages mais parle
+toujours à l'unique Worker Cloudflare (API + WebSocket temps réel) via CORS,
+donc les deux URLs donnent accès aux mêmes listes partagées.
+
+C'est géré par `.github/workflows/pages.yml`, qui build le client avec
+`VITE_SYNC_WORKER_URL` pointant vers l'URL publique du Worker (variable de
+dépôt `vars.DEPLOY_URL`, la même que celle utilisée par `deploy.yml`) puis
+publie `dist/client` sur GitHub Pages. Rien à faire manuellement une fois
+Pages activé une première fois dans Settings → Pages (Source: "GitHub
+Actions") ; `VITE_SYNC_WORKER_URL` absente (déploiement Cloudflare seul) =
+chemins `/api/...` relatifs, comportement inchangé.
+
 ## Structure du projet
 
 ```

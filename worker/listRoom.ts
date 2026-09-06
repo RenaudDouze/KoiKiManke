@@ -1,6 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
 import type { ListState, ClientMessage, ServerMessage } from "../shared/types";
 import { applyMessage } from "./reducer";
+import { sanitizeParticipantName } from "./presence";
+
+interface ConnectionAttachment {
+  name: string;
+}
 
 interface Env {
   LIST_ROOM: DurableObjectNamespace<ListRoom>;
@@ -27,10 +32,13 @@ export class ListRoom extends DurableObject<Env> {
     // predictable path.
     if (request.headers.get("Upgrade") === "websocket") {
       if (!this.listState) return new Response("not found", { status: 404 });
+      const name = sanitizeParticipantName(new URL(request.url).searchParams.get("name"));
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
       this.ctx.acceptWebSocket(server);
+      server.serializeAttachment({ name } satisfies ConnectionAttachment);
       server.send(JSON.stringify({ type: "state", state: this.listState } satisfies ServerMessage));
+      this.broadcastPresence();
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -84,6 +92,7 @@ export class ListRoom extends DurableObject<Env> {
     } catch {
       // already closed
     }
+    this.broadcastPresence(ws);
   }
 
   async webSocketError(_ws: WebSocket): Promise<void> {}
@@ -91,6 +100,23 @@ export class ListRoom extends DurableObject<Env> {
   private broadcast(): void {
     const payload = JSON.stringify({ type: "state", state: this.listState! } satisfies ServerMessage);
     for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.send(payload);
+      } catch {
+        // ignore dead sockets, hibernation API cleans them up
+      }
+    }
+  }
+
+  /** Broadcasts the list of currently-connected participant names. `excluding`
+   * defensively drops a socket that's in the middle of closing — the runtime
+   * usually already excludes it from getWebSockets() by the time
+   * webSocketClose runs, but this guards against relying on that ordering. */
+  private broadcastPresence(excluding?: WebSocket): void {
+    const sockets = this.ctx.getWebSockets().filter((ws) => ws !== excluding);
+    const names = sockets.map((ws) => (ws.deserializeAttachment() as ConnectionAttachment | null)?.name ?? "Invité");
+    const payload = JSON.stringify({ type: "presence", names } satisfies ServerMessage);
+    for (const ws of sockets) {
       try {
         ws.send(payload);
       } catch {

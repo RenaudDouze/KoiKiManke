@@ -73,6 +73,9 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: "state"; state: ListState }
+  /** Ephemeral, never persisted: the display names of every WebSocket
+   * currently connected to this list (see worker/listRoom.ts). */
+  | { type: "presence"; names: string[] }
   | { type: "error"; message: string };
 
 export const UNCATEGORIZED = null;

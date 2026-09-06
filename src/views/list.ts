@@ -998,6 +998,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           </div>
           <ul id="suggestions" class="suggestions" hidden></ul>
         </form>
+        <p class="add-form-hint">Non protégé : évite les informations personnelles ou sensibles.</p>
 
         <div id="quick-add" class="quick-add"></div>
 

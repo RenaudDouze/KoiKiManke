@@ -512,6 +512,79 @@ describe("applyMessage", () => {
     });
   });
 
+  describe("gestion des suggestions (historique)", () => {
+    describe("deleteHistoryEntry", () => {
+      it("retire l'entrée visée, laisse les autres intactes", () => {
+        const state = makeState({
+          history: [
+            { key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 },
+            { key: "pain", label: "Pain", categoryId: null, useCount: 1, lastUsed: 0 },
+          ],
+        });
+        applyMessage(state, { type: "deleteHistoryEntry", key: "lait" }, NOW);
+        expect(state.history.map((h) => h.key)).toEqual(["pain"]);
+      });
+
+      it("ignore une clé inconnue", () => {
+        const state = makeState({ history: [{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 }] });
+        applyMessage(state, { type: "deleteHistoryEntry", key: "nope" }, NOW);
+        expect(state.history).toHaveLength(1);
+      });
+    });
+
+    describe("updateHistoryEntry", () => {
+      it("renomme le libellé et met à jour la clé de déduplication", () => {
+        const state = makeState({ history: [{ key: "pome", label: "Pome", categoryId: null, useCount: 2, lastUsed: 0 }] });
+        applyMessage(state, { type: "updateHistoryEntry", key: "pome", label: "Pommes" }, NOW);
+        expect(state.history).toEqual([{ key: "pommes", label: "Pommes", categoryId: null, useCount: 2, lastUsed: 0 }]);
+      });
+
+      it("renomme sans changer la clé si seule la casse change (ex: correction d'une majuscule)", () => {
+        const state = makeState({ history: [{ key: "lait", label: "lait", categoryId: null, useCount: 1, lastUsed: 0 }] });
+        applyMessage(state, { type: "updateHistoryEntry", key: "lait", label: "Lait" }, NOW);
+        expect(state.history).toEqual([{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 }]);
+      });
+
+      it("change la catégorie", () => {
+        const state = makeState({
+          categories: [{ id: "c1", name: "Fruits", order: 0 }],
+          history: [{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 }],
+        });
+        applyMessage(state, { type: "updateHistoryEntry", key: "lait", categoryId: "c1" }, NOW);
+        expect(state.history[0].categoryId).toBe("c1");
+      });
+
+      it("retombe sur categoryId=null si la catégorie fournie n'existe pas", () => {
+        const state = makeState({ history: [{ key: "lait", label: "Lait", categoryId: "c1", useCount: 1, lastUsed: 0 }] });
+        applyMessage(state, { type: "updateHistoryEntry", key: "lait", categoryId: "ghost" }, NOW);
+        expect(state.history[0].categoryId).toBeNull();
+      });
+
+      it("ignore un libellé blanc (ne renomme pas)", () => {
+        const state = makeState({ history: [{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 }] });
+        applyMessage(state, { type: "updateHistoryEntry", key: "lait", label: "   " }, NOW);
+        expect(state.history[0].label).toBe("Lait");
+      });
+
+      it("ignore une clé inconnue", () => {
+        const state = makeState({ history: [{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 }] });
+        applyMessage(state, { type: "updateHistoryEntry", key: "nope", label: "X" }, NOW);
+        expect(state.history[0].label).toBe("Lait");
+      });
+
+      it("fusionne avec l'entrée existante si le renommage produit une clé déjà utilisée", () => {
+        const state = makeState({
+          history: [
+            { key: "pome", label: "Pome", categoryId: null, useCount: 2, lastUsed: 100 },
+            { key: "pommes", label: "Pommes", categoryId: "c1", useCount: 3, lastUsed: 50 },
+          ],
+        });
+        applyMessage(state, { type: "updateHistoryEntry", key: "pome", label: "Pommes" }, NOW);
+        expect(state.history).toEqual([{ key: "pommes", label: "Pommes", categoryId: "c1", useCount: 5, lastUsed: 100 }]);
+      });
+    });
+  });
+
   describe("restoreItems (annulation d'une suppression)", () => {
     it("réinsère un article supprimé tel quel (id, order, checked d'origine)", () => {
       const state = makeState();
@@ -574,6 +647,22 @@ describe("applyMessage", () => {
       // L'article a été réassigné à "cat-2" pendant la fenêtre d'annulation :
       // la restauration ne doit pas l'arracher à ce nouveau choix.
       expect(state.items[0].categoryId).toBe("cat-2");
+    });
+  });
+
+  describe("restoreHistoryEntry (annulation d'une suppression de suggestion)", () => {
+    it("réinsère l'entrée supprimée telle quelle", () => {
+      const state = makeState();
+      const entry = { key: "lait", label: "Lait", categoryId: "cat-1", useCount: 4, lastUsed: 123 };
+      applyMessage(state, { type: "restoreHistoryEntry", entry }, NOW);
+      expect(state.history).toEqual([entry]);
+    });
+
+    it("ne duplique pas si l'entrée existe déjà (idempotent)", () => {
+      const entry = { key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 };
+      const state = makeState({ history: [entry] });
+      applyMessage(state, { type: "restoreHistoryEntry", entry }, NOW);
+      expect(state.history).toEqual([entry]);
     });
   });
 });

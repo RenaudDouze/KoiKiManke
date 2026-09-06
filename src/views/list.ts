@@ -266,6 +266,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       updateThemeMenuItem(e.currentTarget as HTMLElement);
     });
     panel?.querySelector('[data-action="manage-categories"]')?.addEventListener("click", openCategoryManager);
+    panel?.querySelector('[data-action="manage-suggestions"]')?.addEventListener("click", openSuggestionManager);
     panel?.querySelector('[data-action="export"]')?.addEventListener("click", () => {
       if (state) exportListState(state);
     });
@@ -392,6 +393,82 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         if (!name) return;
         conn.send({ type: "addCategory", id: uid(), name });
         input.value = "";
+      });
+    };
+    const close = () => {
+      overlay.remove();
+      unsubscribe();
+      releaseFocusTrap();
+      document.removeEventListener("keydown", onKeydown);
+    };
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    document.addEventListener("keydown", onKeydown);
+    const unsubscribe = conn.onState(() => render());
+    document.body.appendChild(overlay);
+    render();
+    const releaseFocusTrap = trapFocus(overlay);
+  }
+
+  function openSuggestionManager(): void {
+    if (!state) return;
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    const render = () => {
+      const entries = [...state!.history].sort((a, b) => b.useCount - a.useCount || b.lastUsed - a.lastUsed);
+      overlay.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+          <button class="icon-btn modal-close" aria-label="Fermer">${icons.close}</button>
+          <h2>Suggestions</h2>
+          ${
+            entries.length === 0
+              ? `<p class="hint">Aucune suggestion pour l'instant : elles apparaissent une fois qu'un article a été coché.</p>`
+              : `<ul class="manage-category-list manage-suggestion-list">
+                  ${entries
+                    .map(
+                      (h) => `
+                    <li data-key="${escapeHtml(h.key)}">
+                      <span class="suggestion-name" data-key="${escapeHtml(h.key)}">${escapeHtml(h.label)}</span>
+                      <select class="suggestion-category" data-key="${escapeHtml(h.key)}" aria-label="Catégorie de « ${escapeHtml(h.label)} »">
+                        ${categoryOptionsHtml(state!.categories, h.categoryId)}
+                      </select>
+                      <button class="icon-btn" data-action="del" data-key="${escapeHtml(h.key)}" aria-label="Supprimer la suggestion « ${escapeHtml(h.label)} »">${icons.trash}</button>
+                    </li>`,
+                    )
+                    .join("")}
+                </ul>`
+          }
+        </div>
+      `;
+      overlay.querySelector(".modal-close")?.addEventListener("click", close);
+      overlay.querySelectorAll<HTMLElement>(".suggestion-name").forEach((el) => {
+        el.addEventListener("click", () => {
+          startEdit(el, {
+            value: el.textContent || "",
+            onCommit: (value) => {
+              if (value) conn.send({ type: "updateHistoryEntry", key: el.dataset.key!, label: value });
+              else render();
+            },
+          });
+        });
+      });
+      overlay.querySelectorAll<HTMLSelectElement>(".suggestion-category").forEach((sel) => {
+        sel.addEventListener("change", () => {
+          conn.send({ type: "updateHistoryEntry", key: sel.dataset.key!, categoryId: sel.value || null });
+        });
+      });
+      overlay.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const key = btn.dataset.key!;
+          const entry = state!.history.find((h) => h.key === key);
+          if (!entry) return;
+          conn.send({ type: "deleteHistoryEntry", key });
+          pushUndo(`Suggestion « ${entry.label} » supprimée`, () => conn.send({ type: "restoreHistoryEntry", entry }));
+        });
       });
     };
     const close = () => {
@@ -670,12 +747,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     `;
   }
 
-  function categoryOptionsHtml(categories: Category[]): string {
-    return [`<option value="">Sans catégorie</option>`]
+  function categoryOptionsHtml(categories: Category[], selectedId: string | null = null): string {
+    return [`<option value="" ${selectedId === null ? "selected" : ""}>Sans catégorie</option>`]
       .concat(
         [...categories]
           .sort((a, b) => a.order - b.order)
-          .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`),
+          .map((c) => `<option value="${c.id}" ${c.id === selectedId ? "selected" : ""}>${escapeHtml(c.name)}</option>`),
       )
       .join("");
   }
@@ -693,6 +770,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <div class="menu-panel" id="menu-panel" hidden>
             <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
             <button type="button" data-action="manage-categories">Gérer les catégories</button>
+            <button type="button" data-action="manage-suggestions">Gérer les suggestions</button>
             <button type="button" data-action="export">Exporter (JSON)</button>
             <button type="button" data-action="import">Importer…</button>
             <button type="button" data-action="clear-checked">Vider les articles cochés</button>

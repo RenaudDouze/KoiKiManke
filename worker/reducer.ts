@@ -186,6 +186,38 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       return;
     }
 
+    case "deleteHistoryEntry": {
+      state.history = state.history.filter((h) => h.key !== msg.key);
+      return;
+    }
+
+    case "updateHistoryEntry": {
+      const entry = state.history.find((h) => h.key === msg.key);
+      if (!entry) return;
+      if (msg.categoryId !== undefined) entry.categoryId = validCategoryId(state, msg.categoryId);
+      if (msg.label !== undefined) {
+        const label = msg.label.trim();
+        if (label) {
+          const newKey = historyKey(label);
+          if (newKey !== entry.key) {
+            // Renaming into another entry's name merges them instead of
+            // creating a duplicate key (e.g. correcting a typo into an
+            // existing suggestion).
+            const collision = state.history.find((h) => h.key === newKey);
+            if (collision) {
+              collision.useCount += entry.useCount;
+              collision.lastUsed = Math.max(collision.lastUsed, entry.lastUsed);
+              state.history = state.history.filter((h) => h !== entry);
+              return;
+            }
+            entry.key = newKey;
+          }
+          entry.label = label;
+        }
+      }
+      return;
+    }
+
     case "restoreItems": {
       const existingIds = new Set(state.items.map((i) => i.id));
       for (const item of msg.items) {
@@ -203,6 +235,13 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
         // Only reclaims items still uncategorized: if the user manually
         // reassigned one elsewhere during the undo window, that choice wins.
         if (restoredIds.has(item.id) && item.categoryId === null) item.categoryId = msg.category.id;
+      }
+      return;
+    }
+
+    case "restoreHistoryEntry": {
+      if (!state.history.some((h) => h.key === msg.entry.key)) {
+        state.history.push(msg.entry);
       }
       return;
     }

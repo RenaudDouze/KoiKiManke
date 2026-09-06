@@ -14,7 +14,7 @@ test("le thème choisi persiste après un rechargement", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 
-test("annuler restaure un article supprimé", async ({ page }) => {
+test("supprimer un article demande un second clic au même endroit, puis reste annulable", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");
   await page.waitForURL(/\/l\//);
@@ -24,6 +24,12 @@ test("annuler restaure un article supprimé", async ({ page }) => {
   await page.click(".add-submit");
   await expect(page.locator(".item .item-name")).toHaveText("Pommes");
 
+  // Premier clic : arme le bouton, ne supprime rien encore.
+  await page.click(".item-delete");
+  await expect(page.locator(".item-delete")).toHaveClass(/confirm-armed/);
+  await expect(page.locator(".item")).toHaveCount(1);
+
+  // Second clic au même endroit : confirme la suppression.
   await page.click(".item-delete");
   await expect(page.locator(".item")).toHaveCount(0);
   await expect(page.locator("#undo-toast")).toContainText("« Pommes » supprimé");
@@ -114,6 +120,7 @@ test("les suggestions ne s'enregistrent qu'à la coche, pas au simple ajout", as
   await page.fill("#add-input", "Pommes");
   await page.click(".add-submit");
   await page.click(".item-delete");
+  await page.click(".item-delete");
   await expect(page.locator("#quick-add .chip")).toHaveCount(0);
 
   // Cochée : devient une suggestion (même sans être supprimée/vidée).
@@ -140,9 +147,11 @@ test("ajouter un article depuis une suggestion dont la catégorie a été suppri
   await page.click(".add-submit");
   await page.locator(".item-check").check();
   await page.click(".item-delete");
+  await page.click(".item-delete");
 
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
+  await page.click('[data-action="del"]');
   await page.click('[data-action="del"]');
   await page.keyboard.press("Escape");
 
@@ -190,9 +199,11 @@ test("gérer les suggestions : renommer, changer de catégorie, supprimer puis a
   await page.click("#quick-add .chip");
   await expect(page.locator(".category-section.has-color .item-name")).toHaveText("Poires");
 
-  // Supprimer la suggestion puis annuler la restaure.
+  // Supprimer la suggestion (deux clics : armement puis confirmation) puis
+  // annuler la restaure.
   await page.click("#btn-menu");
   await page.click('[data-action="manage-suggestions"]');
+  await page.click('[data-action="del"]');
   await page.click('[data-action="del"]');
   await expect(page.locator(".manage-suggestion-list li")).toHaveCount(0);
   await page.keyboard.press("Escape");
@@ -273,4 +284,32 @@ test("une catégorie sans article dans la liste reste gérable mais ne s'affiche
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
   await expect(page.locator(".cat-name")).toHaveText(["Fruits", "Légumes"]);
+});
+
+test("« Vider les articles cochés » demande aussi un second clic au même endroit", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.fill("#add-input", "Pommes");
+  await page.click(".add-submit");
+  await page.locator(".item-check").check();
+
+  const clearBtn = page.locator('[data-action="clear-checked"]');
+
+  // Premier clic : arme le bouton (texte de confirmation), ne vide rien.
+  await page.click("#btn-menu");
+  await clearBtn.click();
+  await expect(clearBtn).toHaveText("Confirmer : tout vider ?");
+  await expect(page.locator(".item")).toHaveCount(1);
+
+  // Second clic au même endroit : confirme, et referme le menu.
+  await clearBtn.click();
+  await expect(page.locator(".item")).toHaveCount(0);
+  await expect(page.locator("#menu-panel")).toBeHidden();
+  await expect(page.locator("#undo-toast")).toContainText("1 article(s) coché(s) vidé(s)");
+
+  await page.click("#undo-toast button");
+  await expect(page.locator(".item .item-name")).toHaveText("Pommes");
 });

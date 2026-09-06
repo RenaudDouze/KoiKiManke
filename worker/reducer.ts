@@ -120,7 +120,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
     case "addCategory": {
       const name = msg.name.trim();
       if (!name) return;
-      const category: Category = { id: msg.id, name };
+      const category: Category = { id: msg.id, name, order: nextOrder(state.categories) };
       state.categories.push(category);
       return;
     }
@@ -144,6 +144,15 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       return;
     }
 
+    case "reorderCategories": {
+      const order = new Map(msg.orderedIds.map((id, idx) => [id, idx]));
+      for (const category of state.categories) {
+        const idx = order.get(category.id);
+        if (idx !== undefined) category.order = idx;
+      }
+      return;
+    }
+
     case "importState": {
       if (msg.mode === "replace") {
         state.items = msg.data.items;
@@ -158,9 +167,10 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
           if (existingId) {
             categoryIdMap.set(category.id, existingId);
           } else {
-            state.categories.push(category);
-            existingCategoryNames.set(category.name.toLowerCase(), category.id);
-            categoryIdMap.set(category.id, category.id);
+            const newCategory: Category = { ...category, order: nextOrder(state.categories) };
+            state.categories.push(newCategory);
+            existingCategoryNames.set(newCategory.name.toLowerCase(), newCategory.id);
+            categoryIdMap.set(category.id, newCategory.id);
           }
         }
         const existingItemKeys = new Set(state.items.map((i) => historyKey(i.name)));

@@ -136,8 +136,6 @@ test("ajouter un article depuis une suggestion dont la catégorie a été suppri
   await page.waitForURL(/\/l\//);
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
 
-  // "Bricolage" (plutôt que "Fruits") pour ne pas chevaucher le rayon par
-  // défaut "Fruits & Légumes" proposé à la création de toute nouvelle liste.
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
   await page.fill("#new-category-name", "Bricolage");
@@ -174,8 +172,6 @@ test("gérer les suggestions : renommer, changer de catégorie, supprimer puis a
   await page.waitForURL(/\/l\//);
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
 
-  // "Bricolage" (plutôt que "Fruits") pour ne pas chevaucher le rayon par
-  // défaut "Fruits & Légumes" proposé à la création de toute nouvelle liste.
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
   await page.fill("#new-category-name", "Bricolage");
@@ -265,9 +261,6 @@ test("une catégorie sans article dans la liste reste gérable mais ne s'affiche
   await page.waitForURL(/\/l\//);
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
 
-  // "Bricolage"/"Papeterie" (plutôt que "Fruits"/"Légumes") pour ne pas
-  // chevaucher les rayons par défaut proposés à la création de toute
-  // nouvelle liste (dont "Fruits & Légumes").
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
   await page.fill("#new-category-name", "Bricolage");
@@ -278,9 +271,8 @@ test("une catégorie sans article dans la liste reste gérable mais ne s'affiche
   await expect(page.locator(".manage-category-list li", { hasText: "Papeterie" })).toHaveCount(1);
   await page.keyboard.press("Escape");
 
-  // Un seul article, dans "Bricolage" : "Papeterie" (et les rayons par
-  // défaut, encore vides) n'ont rien à montrer et ne doivent pas encombrer
-  // la liste avec un en-tête vide.
+  // Un seul article, dans "Bricolage" : "Papeterie" (encore vide) n'a rien
+  // à montrer et ne doit pas encombrer la liste avec un en-tête vide.
   await page.selectOption("#add-category", { label: "Bricolage" });
   await page.fill("#add-input", "Pommes");
   await page.click(".add-submit");
@@ -288,9 +280,8 @@ test("une catégorie sans article dans la liste reste gérable mais ne s'affiche
   await expect(page.locator(".category-name")).toHaveText(["Bricolage"]);
   await expect(page.locator(".category-section")).toHaveCount(1);
 
-  // Les deux catégories personnalisées restent proposables/gérables
-  // ailleurs, groupées à part des rayons par défaut.
-  await expect(page.locator('#add-category optgroup[label="Mes catégories"] option')).toHaveText(["Bricolage", "Papeterie"]);
+  // Les deux catégories restent proposables/gérables ailleurs.
+  await expect(page.locator("#add-category option")).toHaveText(["Sans catégorie", "Bricolage", "Papeterie"]);
   await page.click("#btn-menu");
   await page.click('[data-action="manage-categories"]');
   await expect(page.locator(".cat-name", { hasText: "Bricolage" })).toHaveCount(1);
@@ -325,49 +316,3 @@ test("« Vider les articles cochés » demande aussi un second clic au même end
   await expect(page.locator(".item .item-name")).toHaveText("Pommes");
 });
 
-test("une nouvelle liste propose des rayons par défaut, groupés à part des catégories personnalisées", async ({ page }) => {
-  await page.goto("/");
-  await page.click("#create-form button[type=submit]");
-  await page.waitForURL(/\/l\//);
-  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
-
-  // Les rayons par défaut apparaissent d'emblée, groupés sous "Rayons",
-  // dans le sélecteur de catégorie du formulaire d'ajout — et toujours
-  // classés par ordre alphanumérique, jamais dans l'ordre de création.
-  const rayonsGroup = page.locator('#add-category optgroup[label="Rayons"]');
-  await expect(rayonsGroup.locator("option")).toHaveText([
-    "Animalerie",
-    "Bébé",
-    "Boissons",
-    "Boucherie & Poissonnerie",
-    "Boulangerie & Pâtisserie",
-    "Crèmerie",
-    "Entretien & Maison",
-    "Épicerie salée",
-    "Épicerie sucrée",
-    "Fruits & Légumes",
-    "Hygiène & Beauté",
-    "Surgelés",
-  ]);
-  // Pas de groupe "Mes catégories" tant qu'aucune n'a été ajoutée.
-  await expect(page.locator('#add-category optgroup[label="Mes catégories"]')).toHaveCount(0);
-
-  // Sans article, ils restent listés (gérables) mais n'encombrent pas la
-  // liste elle-même.
-  await expect(page.locator(".category-section")).toHaveCount(0);
-  await page.click("#btn-menu");
-  await page.click('[data-action="manage-categories"]');
-  await expect(page.locator(".manage-category-list li")).toHaveCount(12);
-  await page.keyboard.press("Escape");
-
-  // Une catégorie personnalisée ajoutée ensuite rejoint son propre groupe,
-  // distinct des rayons par défaut.
-  await page.click("#btn-menu");
-  await page.click('[data-action="manage-categories"]');
-  await page.fill("#new-category-name", "Bricolage");
-  await page.click("#new-category-form button[type=submit]");
-  await page.keyboard.press("Escape");
-
-  await expect(page.locator('#add-category optgroup[label="Rayons"] option')).toHaveCount(12);
-  await expect(page.locator('#add-category optgroup[label="Mes catégories"] option')).toHaveText(["Bricolage"]);
-});

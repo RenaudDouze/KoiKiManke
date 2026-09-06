@@ -2,7 +2,14 @@ import { defineConfig } from "vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { VitePWA } from "vite-plugin-pwa";
 
+// "/" sur Cloudflare Workers (servi à la racine du domaine) ; sous-chemin du
+// dépôt (ex: "/koikimanke/") sur GitHub Pages, où l'app est servie depuis un
+// dépôt de projet plutôt qu'un domaine dédié — voir VITE_BASE_PATH dans
+// .github/workflows/pages.yml et src/lib/basePath.ts pour le routeur.
+const base = process.env.VITE_BASE_PATH || "/";
+
 export default defineConfig({
+  base,
   plugins: [
     cloudflare(),
     // VitePWA isn't aware of @cloudflare/vite-plugin's separate worker
@@ -22,7 +29,8 @@ export default defineConfig({
         short_name: "KoiKiManke",
         description: "Liste de courses partagée, synchronisée en temps réel.",
         lang: "fr",
-        start_url: "/",
+        start_url: base,
+        scope: base,
         display: "standalone",
         background_color: "#f4f6f3",
         theme_color: "#1f8a53",

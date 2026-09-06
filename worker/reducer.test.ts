@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyMessage, touchHistory, nextOrder, historyKey, MAX_HISTORY } from "./reducer";
+import { applyMessage, touchHistory, nextOrder, historyKey, validCategoryId, MAX_HISTORY } from "./reducer";
 import type { ListState } from "../shared/types";
 
 function makeState(overrides: Partial<ListState> = {}): ListState {
@@ -29,6 +29,21 @@ describe("nextOrder", () => {
   });
   it("vaut max(order) + 1 sinon", () => {
     expect(nextOrder([{ order: 0 }, { order: 5 }, { order: 2 }])).toBe(6);
+  });
+});
+
+describe("validCategoryId", () => {
+  it("retourne null tel quel", () => {
+    expect(validCategoryId(makeState(), null)).toBeNull();
+  });
+
+  it("retourne l'id si la catégorie existe", () => {
+    const state = makeState({ categories: [{ id: "c1", name: "Fruits", order: 0 }] });
+    expect(validCategoryId(state, "c1")).toBe("c1");
+  });
+
+  it("retombe sur null si la catégorie n'existe pas (ex: supprimée entre-temps)", () => {
+    expect(validCategoryId(makeState(), "ghost")).toBeNull();
   });
 });
 
@@ -100,8 +115,8 @@ describe("applyMessage", () => {
   });
 
   describe("addItem", () => {
-    it("ajoute un article avec quantité extraite et alimente l'historique", () => {
-      const state = makeState();
+    it("ajoute un article avec quantité extraite, sans toucher l'historique", () => {
+      const state = makeState({ categories: [{ id: "cat-1", name: "Fruits", order: 0 }] });
       applyMessage(state, { type: "addItem", id: "i1", rawText: "2 kg pommes", categoryId: "cat-1" }, NOW);
       expect(state.items).toEqual([
         {
@@ -115,7 +130,14 @@ describe("applyMessage", () => {
           updatedAt: NOW,
         },
       ]);
-      expect(state.history).toEqual([{ key: "pommes", label: "pommes", categoryId: "cat-1", useCount: 1, lastUsed: NOW }]);
+      // L'historique (et donc les suggestions) ne s'alimente qu'à la coche.
+      expect(state.history).toEqual([]);
+    });
+
+    it("retombe sur categoryId=null si la catégorie fournie n'existe pas (ex: supprimée entre-temps)", () => {
+      const state = makeState();
+      applyMessage(state, { type: "addItem", id: "i1", rawText: "Pommes", categoryId: "deleted-cat" }, NOW);
+      expect(state.items[0].categoryId).toBeNull();
     });
 
     it("attribue des order croissants", () => {
@@ -164,18 +186,36 @@ describe("applyMessage", () => {
       applyMessage(state, { type: "updateItem", id: "nope", name: "X" }, NOW);
       expect(state.items[0].name).toBe("Lait");
     });
+
+    it("retombe sur categoryId=null si la nouvelle catégorie fournie n'existe pas", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", categoryId: "ghost" }, NOW);
+      expect(state.items[0].categoryId).toBeNull();
+    });
   });
 
   describe("toggleItem", () => {
-    it("coche et décoche", () => {
+    it("coche et décoche, et n'alimente l'historique qu'au passage à coché", () => {
       const state = makeState({
         items: [{ id: "i1", name: "Lait", quantity: "", categoryId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0 }],
       });
       applyMessage(state, { type: "toggleItem", id: "i1", checked: true }, NOW);
       expect(state.items[0].checked).toBe(true);
       expect(state.items[0].updatedAt).toBe(NOW);
+      expect(state.history).toEqual([{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: NOW }]);
+
       applyMessage(state, { type: "toggleItem", id: "i1", checked: false }, NOW + 1);
       expect(state.items[0].checked).toBe(false);
+      // Décocher ne doit pas retoucher l'historique.
+      expect(state.history).toEqual([{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: NOW }]);
+    });
+
+    it("ne recompte pas l'historique si l'article est déjà coché", () => {
+      const state = makeState({
+        items: [{ id: "i1", name: "Lait", quantity: "", categoryId: null, checked: true, order: 0, createdAt: 0, updatedAt: 0 }],
+      });
+      applyMessage(state, { type: "toggleItem", id: "i1", checked: true }, NOW);
+      expect(state.history).toEqual([]);
     });
 
     it("ignore un id inconnu", () => {
@@ -250,18 +290,28 @@ describe("applyMessage", () => {
       expect(state.categories[0].name).toBe("Légumes");
     });
 
-    it("deleteCategory retire la catégorie, déplace ses articles vers null, laisse les autres intacts", () => {
+    it("deleteCategory retire la catégorie, déplace ses articles vers null, nettoie l'historique, laisse le reste intact", () => {
       const state = makeState({
         categories: [{ id: "c1", name: "Fruits", order: 0 }],
         items: [
           { id: "i1", name: "Pommes", quantity: "", categoryId: "c1", checked: false, order: 0, createdAt: 0, updatedAt: 0 },
           { id: "i2", name: "Lait", quantity: "", categoryId: null, checked: false, order: 1, createdAt: 0, updatedAt: 0 },
         ],
+        history: [
+          { key: "pommes", label: "Pommes", categoryId: "c1", useCount: 1, lastUsed: 0 },
+          { key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0 },
+        ],
       });
       applyMessage(state, { type: "deleteCategory", id: "c1" }, NOW);
       expect(state.categories).toEqual([]);
       expect(state.items.find((i) => i.id === "i1")!.categoryId).toBeNull();
       expect(state.items.find((i) => i.id === "i2")!.categoryId).toBeNull();
+      // Une suggestion basée sur "Pommes" ne doit plus jamais proposer la
+      // catégorie supprimée : sans ce nettoyage, ajouter l'article depuis
+      // cette suggestion lui donnerait un categoryId fantôme et le rendrait
+      // invisible dans la liste (aucune section ne le réclame).
+      expect(state.history.find((h) => h.key === "pommes")!.categoryId).toBeNull();
+      expect(state.history.find((h) => h.key === "lait")!.categoryId).toBeNull();
     });
 
     it("reorderCategories réassigne order, laisse inchangée une catégorie absente de orderedIds", () => {
@@ -420,6 +470,45 @@ describe("applyMessage", () => {
         NOW,
       );
       expect(state.history).toEqual([{ key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: NOW }]);
+    });
+
+    it("mode merge remappe le categoryId de l'historique importé vers le nouvel id de catégorie", () => {
+      const state = makeState();
+      applyMessage(
+        state,
+        {
+          type: "importState",
+          mode: "merge",
+          data: {
+            name: "",
+            items: [],
+            categories: [{ id: "imported-cat", name: "Fruits", order: 0 }],
+            history: [{ key: "pommes", label: "Pommes", categoryId: "imported-cat", useCount: 3, lastUsed: 0 }],
+          },
+        },
+        NOW,
+      );
+      const fruitsCategory = state.categories.find((c) => c.name === "Fruits")!;
+      expect(state.history[0].categoryId).toBe(fruitsCategory.id);
+    });
+
+    it("mode merge retombe sur categoryId=null si la catégorie de l'historique importé est introuvable", () => {
+      const state = makeState();
+      applyMessage(
+        state,
+        {
+          type: "importState",
+          mode: "merge",
+          data: {
+            name: "",
+            items: [],
+            categories: [],
+            history: [{ key: "pommes", label: "Pommes", categoryId: "n-existe-pas", useCount: 1, lastUsed: 0 }],
+          },
+        },
+        NOW,
+      );
+      expect(state.history[0].categoryId).toBeNull();
     });
   });
 

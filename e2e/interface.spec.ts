@@ -102,3 +102,56 @@ test("les listes favorites sont épinglées au-dessus des autres, sans code affi
   // liste existante qu'il n'en crée ou n'en rejoint une nouvelle).
   await expect(page.locator(".card h2")).toHaveText(["Listes récentes", "Nouvelle liste", "Rejoindre une liste"]);
 });
+
+test("les suggestions ne s'enregistrent qu'à la coche, pas au simple ajout", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  // Ajoutée puis supprimée sans jamais être cochée : ne doit laisser aucune
+  // trace dans les suggestions.
+  await page.fill("#add-input", "Pommes");
+  await page.click(".add-submit");
+  await page.click(".item-delete");
+  await expect(page.locator("#quick-add .chip")).toHaveCount(0);
+
+  // Cochée : devient une suggestion (même sans être supprimée/vidée).
+  await page.fill("#add-input", "Poires");
+  await page.click(".add-submit");
+  await page.locator(".item-check").check();
+  await expect(page.locator("#quick-add .chip")).toHaveText(["+ Poires"]);
+});
+
+test("ajouter un article depuis une suggestion dont la catégorie a été supprimée ne le rend pas invisible", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.fill("#new-category-name", "Fruits");
+  await page.click("#new-category-form button[type=submit]");
+  await page.keyboard.press("Escape");
+
+  await page.selectOption("#add-category", { label: "Fruits" });
+  await page.fill("#add-input", "Pommes");
+  await page.click(".add-submit");
+  await page.locator(".item-check").check();
+  await page.click(".item-delete");
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.click('[data-action="del"]');
+  await page.keyboard.press("Escape");
+
+  // La suggestion "Pommes" pointe encore vers la catégorie supprimée : sans
+  // le nettoyage/la validation côté serveur, l'article réapparaîtrait avec
+  // un categoryId fantôme et resterait invisible (régression).
+  await expect(page.locator("#quick-add .chip")).toHaveText(["+ Pommes"]);
+  await page.click("#quick-add .chip");
+
+  await expect(page.locator(".item-name")).toHaveText("Pommes");
+  await expect(page.locator(".empty-state")).toHaveCount(0);
+});

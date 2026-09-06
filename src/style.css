@@ -131,6 +131,13 @@ button:focus-visible {
   background: var(--checked-bg);
 }
 
+/* Étape d'armement avant confirmation d'une suppression (voir
+   src/lib/confirmClick.ts) : un second clic au même endroit confirme. */
+.confirm-armed {
+  background: var(--danger) !important;
+  color: #fff !important;
+}
+
 /* ---------- Home ---------- */
 
 .home {

@@ -6,6 +6,7 @@ import { cacheListState, getCachedListState, touchRecentList } from "../lib/stor
 import { uid } from "../lib/id";
 import { escapeHtml } from "../lib/dom";
 import { startEdit } from "../lib/editable";
+import { wireConfirmClick } from "../lib/confirmClick";
 import { enableDragReorder } from "../lib/dnd";
 import { openShareModal } from "../components/shareModal";
 import { exportListState, parseImportFile } from "../lib/importExport";
@@ -270,12 +271,20 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     panel?.querySelector('[data-action="export"]')?.addEventListener("click", () => {
       if (state) exportListState(state);
     });
-    panel?.querySelector('[data-action="clear-checked"]')?.addEventListener("click", () => {
-      const checkedItems = state?.items.filter((i) => i.checked) ?? [];
-      if (checkedItems.length === 0) return;
-      conn.send({ type: "clearChecked" });
-      pushUndo(`${checkedItems.length} article(s) coché(s) vidé(s)`, () => conn.send({ type: "restoreItems", items: checkedItems }));
-    });
+    const clearCheckedBtn = panel?.querySelector<HTMLButtonElement>('[data-action="clear-checked"]');
+    if (clearCheckedBtn) {
+      wireConfirmClick(clearCheckedBtn, {
+        armedText: "Confirmer : tout vider ?",
+        isDisabled: () => (state?.items.filter((i) => i.checked).length ?? 0) === 0,
+        onConfirm: () => {
+          const checkedItems = state?.items.filter((i) => i.checked) ?? [];
+          if (checkedItems.length === 0) return;
+          conn.send({ type: "clearChecked" });
+          pushUndo(`${checkedItems.length} article(s) coché(s) vidé(s)`, () => conn.send({ type: "restoreItems", items: checkedItems }));
+          if (panel) panel.hidden = true;
+        },
+      });
+    }
 
     const fileInput = root.querySelector("#import-file") as HTMLInputElement | null;
     panel?.querySelector('[data-action="import"]')?.addEventListener("click", () => fileInput?.click());
@@ -377,13 +386,16 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         });
       });
       overlay.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const id = btn.dataset.id!;
-          const category = state!.categories.find((c) => c.id === id);
-          if (!category) return;
-          const itemIds = state!.items.filter((i) => i.categoryId === id).map((i) => i.id);
-          conn.send({ type: "deleteCategory", id });
-          pushUndo(`Catégorie « ${category.name} » supprimée`, () => conn.send({ type: "restoreCategory", category, itemIds }));
+        const id = btn.dataset.id!;
+        const category = state!.categories.find((c) => c.id === id);
+        if (!category) return;
+        wireConfirmClick(btn, {
+          armedLabel: `Confirmer la suppression de « ${category.name} »`,
+          onConfirm: () => {
+            const itemIds = state!.items.filter((i) => i.categoryId === id).map((i) => i.id);
+            conn.send({ type: "deleteCategory", id });
+            pushUndo(`Catégorie « ${category.name} » supprimée`, () => conn.send({ type: "restoreCategory", category, itemIds }));
+          },
         });
       });
       overlay.querySelector("#new-category-form")?.addEventListener("submit", (e) => {
@@ -457,12 +469,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         });
       });
       container.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const key = btn.dataset.key!;
-          const entry = state!.history.find((h) => h.key === key);
-          if (!entry) return;
-          conn.send({ type: "deleteHistoryEntry", key });
-          pushUndo(`Suggestion « ${entry.label} » supprimée`, () => conn.send({ type: "restoreHistoryEntry", entry }));
+        const key = btn.dataset.key!;
+        const entry = state!.history.find((h) => h.key === key);
+        if (!entry) return;
+        wireConfirmClick(btn, {
+          armedLabel: `Confirmer la suppression de la suggestion « ${entry.label} »`,
+          onConfirm: () => {
+            conn.send({ type: "deleteHistoryEntry", key });
+            pushUndo(`Suggestion « ${entry.label} » supprimée`, () => conn.send({ type: "restoreHistoryEntry", entry }));
+          },
         });
       });
     };
@@ -705,11 +720,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     });
 
     container.querySelectorAll<HTMLElement>('[data-action="delete-item"]').forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const item = state!.items.find((i) => i.id === btn.dataset.id);
-        if (!item) return;
-        conn.send({ type: "deleteItem", id: item.id });
-        pushUndo(`« ${item.name} » supprimé`, () => conn.send({ type: "restoreItems", items: [item] }));
+      const item = state!.items.find((i) => i.id === btn.dataset.id);
+      if (!item) return;
+      wireConfirmClick(btn, {
+        armedLabel: `Confirmer la suppression de « ${item.name} »`,
+        onConfirm: () => {
+          conn.send({ type: "deleteItem", id: item.id });
+          pushUndo(`« ${item.name} » supprimé`, () => conn.send({ type: "restoreItems", items: [item] }));
+        },
       });
     });
 

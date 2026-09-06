@@ -269,6 +269,17 @@ button:focus-visible {
   padding-bottom: 2rem;
 }
 
+/* Poussée en bas de l'écran par la colonne flex tant que le contenu est
+   court (liste vide ou peu remplie) ; passe sous les articles dans le flux
+   normal dès que la liste dépasse la hauteur de l'écran. */
+.list-privacy-note {
+  margin-top: auto;
+  padding: 1rem 0.8rem 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
 .list-header {
   position: sticky;
   top: 0;

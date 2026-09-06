@@ -288,6 +288,46 @@ test("une catégorie sans article dans la liste reste gérable mais ne s'affiche
   await expect(page.locator(".cat-name", { hasText: "Papeterie" })).toHaveCount(1);
 });
 
+test("on peut choisir manuellement la couleur d'une catégorie, puis revenir à l'automatique", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.fill("#new-category-name", "Bricolage");
+  await page.click("#new-category-form button[type=submit]");
+  const row = page.locator(".manage-category-list li", { hasText: "Bricolage" });
+  await row.waitFor();
+  const autoHue = await row.locator(".cat-row").evaluate((el) => getComputedStyle(el).getPropertyValue("--cat-hue").trim());
+
+  // La palette est fermée par défaut ; cliquer sur le point ouvre le choix,
+  // avec "Auto" déjà marqué comme sélectionné.
+  await expect(row.locator(".color-palette")).toHaveCount(0);
+  await row.locator(".color-swatch-toggle").click();
+  await expect(row.locator(".color-swatch-auto")).toHaveClass(/selected/);
+
+  // Choisir "Bleu" (teinte 240) applique la couleur, ferme la palette, et se
+  // reflète aussi dans la liste principale (article de cette catégorie).
+  await row.locator('.color-swatch[data-color="240"]').click();
+  await expect(row.locator(".color-palette")).toHaveCount(0);
+  await expect(row.locator(".cat-row")).toHaveCSS("--cat-hue", "240");
+  await page.keyboard.press("Escape");
+
+  await page.selectOption("#add-category", { label: "Bricolage" });
+  await page.fill("#add-input", "Pommes");
+  await page.click(".add-submit");
+  await expect(page.locator(".category-section.has-color")).toHaveCSS("--cat-hue", "240");
+
+  // Revenir à "Auto" retire la couleur manuelle.
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await row.locator(".color-swatch-toggle").click();
+  await row.locator(".color-swatch-auto").click();
+  await expect(row.locator(".cat-row")).toHaveCSS("--cat-hue", autoHue);
+});
+
 test("« Vider les articles cochés » demande aussi un second clic au même endroit", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");

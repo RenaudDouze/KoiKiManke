@@ -153,6 +153,17 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       return;
     }
 
+    case "setCategoryColor": {
+      const category = state.categories.find((c) => c.id === msg.id);
+      if (!category) return;
+      if (msg.color === null) {
+        delete category.color;
+      } else if (Number.isInteger(msg.color) && msg.color >= 0 && msg.color < 360) {
+        category.color = msg.color;
+      }
+      return;
+    }
+
     case "importState": {
       if (msg.mode === "replace") {
         state.items = msg.data.items;

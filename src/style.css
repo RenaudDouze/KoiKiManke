@@ -726,12 +726,60 @@ button:focus-visible {
 
 .manage-category-list li {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.4rem;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0.4em 0.6em;
+}
+
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.color-swatch-toggle {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.color-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.color-swatch {
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: hsl(var(--swatch-hue) 65% 50%);
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-swatch.selected {
+  border-color: var(--text);
+}
+
+.color-swatch-auto {
+  width: auto;
+  height: 1.3rem;
+  border-radius: 999px;
+  padding: 0 0.6em;
+  font-size: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.color-swatch-auto.selected {
+  border-color: var(--text);
+  color: var(--text);
 }
 
 .cat-name {

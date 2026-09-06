@@ -4,6 +4,7 @@ export interface RecentList {
   code: string;
   name: string;
   lastOpened: number;
+  favorite?: boolean;
 }
 
 const RECENT_KEY = "nldc:recent";
@@ -25,8 +26,10 @@ export function getRecentLists(): RecentList[] {
 }
 
 export function touchRecentList(code: string, name: string): void {
-  const list = getRecentLists().filter((l) => l.code !== code);
-  list.unshift({ code, name, lastOpened: Date.now() });
+  const existing = getRecentLists();
+  const previous = existing.find((l) => l.code === code);
+  const list = existing.filter((l) => l.code !== code);
+  list.unshift({ code, name, lastOpened: Date.now(), favorite: previous?.favorite });
   try {
     localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, MAX_RECENT)));
   } catch {
@@ -36,6 +39,15 @@ export function touchRecentList(code: string, name: string): void {
 
 export function forgetRecentList(code: string): void {
   const list = getRecentLists().filter((l) => l.code !== code);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch {
+    // ignore
+  }
+}
+
+export function toggleFavoriteList(code: string): void {
+  const list = getRecentLists().map((l) => (l.code === code ? { ...l, favorite: !l.favorite } : l));
   try {
     localStorage.setItem(RECENT_KEY, JSON.stringify(list));
   } catch {

@@ -1,5 +1,5 @@
 import { createList, fetchListState } from "../lib/http";
-import { getRecentLists, forgetRecentList, touchRecentList } from "../lib/storage";
+import { getRecentLists, forgetRecentList, touchRecentList, toggleFavoriteList, type RecentList } from "../lib/storage";
 import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
@@ -9,8 +9,23 @@ const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, l
 export function mountHomeView(root: HTMLElement, navigate: (path: string) => void): () => void {
   render();
 
+  function recentItemHtml(r: RecentList): string {
+    return `
+      <li class="recent-item">
+        <button type="button" class="icon-btn recent-favorite" data-code="${r.code}" aria-label="${r.favorite ? "Retirer des favoris" : "Ajouter aux favoris"}" aria-pressed="${r.favorite ? "true" : "false"}">
+          ${r.favorite ? icons.starFilled : icons.star}
+        </button>
+        <button type="button" class="recent-open" data-code="${r.code}">
+          <span class="recent-name">${escapeHtml(r.name)}</span>
+        </button>
+        <button type="button" class="icon-btn recent-forget" data-code="${r.code}" aria-label="Oublier cette liste">${icons.close}</button>
+      </li>`;
+  }
+
   function render(): void {
     const recents = getRecentLists();
+    const favorites = recents.filter((r) => r.favorite);
+    const others = recents.filter((r) => !r.favorite);
     const theme = getThemePreference();
     root.innerHTML = `
       <div class="home">
@@ -22,6 +37,26 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
           <h1>KoiKiManke</h1>
           <p class="tagline">Une liste de courses partagée, synchronisée en direct.</p>
         </header>
+
+        ${
+          recents.length
+            ? `<section class="card">
+                <h2>Listes récentes</h2>
+                ${
+                  favorites.length
+                    ? `<h3 class="recent-subheading">Favoris</h3>
+                       <ul class="recent-list">${favorites.map(recentItemHtml).join("")}</ul>`
+                    : ""
+                }
+                ${
+                  others.length
+                    ? `${favorites.length ? '<h3 class="recent-subheading">Autres</h3>' : ""}
+                       <ul class="recent-list">${others.map(recentItemHtml).join("")}</ul>`
+                    : ""
+                }
+              </section>`
+            : ""
+        }
 
         <section class="card">
           <h2>Nouvelle liste</h2>
@@ -39,28 +74,6 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
           </form>
           <p id="join-error" class="error" hidden></p>
         </section>
-
-        ${
-          recents.length
-            ? `<section class="card">
-                <h2>Listes récentes</h2>
-                <ul class="recent-list">
-                  ${recents
-                    .map(
-                      (r) => `
-                    <li class="recent-item">
-                      <button type="button" class="recent-open" data-code="${r.code}">
-                        <span class="recent-name">${escapeHtml(r.name)}</span>
-                        <span class="recent-code">${r.code}</span>
-                      </button>
-                      <button type="button" class="icon-btn recent-forget" data-code="${r.code}" aria-label="Oublier cette liste">${icons.close}</button>
-                    </li>`,
-                    )
-                    .join("")}
-                </ul>
-              </section>`
-            : ""
-        }
       </div>
     `;
 
@@ -114,6 +127,13 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
 
     root.querySelectorAll<HTMLButtonElement>(".recent-open").forEach((btn) => {
       btn.addEventListener("click", () => navigate(`/l/${btn.dataset.code}`));
+    });
+    root.querySelectorAll<HTMLButtonElement>(".recent-favorite").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (btn.dataset.code) toggleFavoriteList(btn.dataset.code);
+        render();
+      });
     });
     root.querySelectorAll<HTMLButtonElement>(".recent-forget").forEach((btn) => {
       btn.addEventListener("click", (e) => {

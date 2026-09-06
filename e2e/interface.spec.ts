@@ -74,3 +74,31 @@ test("cocher le dernier article déclenche une célébration, mais pas au rechar
   await page.waitForTimeout(1000);
   await expect(page.locator(".celebration-toast")).toHaveCount(0);
 });
+
+test("les listes favorites sont épinglées au-dessus des autres, sans code affiché", async ({ page }) => {
+  await page.goto("/");
+  await page.fill("#create-name", "Liste A");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await page.click("#btn-home");
+
+  await page.fill("#create-name", "Liste B");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await page.click("#btn-home");
+
+  await expect(page.locator(".recent-item")).toHaveCount(2);
+  await expect(page.locator(".recent-code")).toHaveCount(0);
+  await expect(page.locator(".recent-name").first()).toHaveText("Liste B");
+
+  await page.locator(".recent-item", { hasText: "Liste A" }).locator(".recent-favorite").click();
+
+  await expect(page.locator(".recent-subheading").first()).toHaveText("Favoris");
+  await expect(page.locator(".recent-subheading").nth(1)).toHaveText("Autres");
+  await expect(page.locator(".recent-name").first()).toHaveText("Liste A");
+
+  // « Listes récentes » passe avant « Nouvelle liste », elle-même avant
+  // « Rejoindre une liste » (l'utilisateur revient plus souvent sur une
+  // liste existante qu'il n'en crée ou n'en rejoint une nouvelle).
+  await expect(page.locator(".card h2")).toHaveText(["Listes récentes", "Nouvelle liste", "Rejoindre une liste"]);
+});

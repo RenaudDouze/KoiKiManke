@@ -8,6 +8,7 @@
   --primary-dark: #166a3f;
   --primary-contrast: #ffffff;
   --danger: #c4453a;
+  --favorite: #d99a00;
   --checked-bg: #eef1ee;
   --shadow: 0 1px 3px rgba(20, 30, 25, 0.08), 0 1px 2px rgba(20, 30, 25, 0.06);
   color-scheme: light;
@@ -24,6 +25,7 @@
     --primary-dark: #2a9862;
     --primary-contrast: #06150d;
     --danger: #e2685d;
+    --favorite: #f0b429;
     --checked-bg: #1f2a25;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
@@ -40,6 +42,7 @@
   --primary-dark: #2a9862;
   --primary-contrast: #06150d;
   --danger: #e2685d;
+  --favorite: #f0b429;
   --checked-bg: #1f2a25;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
@@ -193,6 +196,19 @@ button:focus-visible {
   font-size: 0.9rem;
 }
 
+.recent-subheading {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.recent-subheading:first-of-type {
+  margin-top: 0;
+}
+
 .recent-list {
   list-style: none;
   margin: 0;
@@ -211,7 +227,6 @@ button:focus-visible {
 .recent-open {
   flex: 1;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -225,10 +240,12 @@ button:focus-visible {
   font-weight: 600;
 }
 
-.recent-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+.recent-favorite {
   color: var(--text-muted);
-  letter-spacing: 0.05em;
+}
+
+.recent-favorite[aria-pressed="true"] {
+  color: var(--favorite);
 }
 
 /* ---------- List view ---------- */

@@ -35,6 +35,8 @@ export const icons = {
   ),
   search: svg('<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
+  star: svg('<path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.7 1.1 6.6-5.8-3.1-5.8 3.1 1.1-6.6-4.8-4.7 6.6-.9z"/>'),
+  starFilled: svg('<path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.7 1.1 6.6-5.8-3.1-5.8 3.1 1.1-6.6-4.8-4.7 6.6-.9z"/>', { filled: true }),
 } as const;
 
 export type IconName = keyof typeof icons;

@@ -242,3 +242,35 @@ test("gestion des suggestions : recherche et favoris", async ({ page }) => {
   await page.fill("#suggestion-search", "");
   await expect(page.locator("#suggestion-list li")).toHaveCount(3);
 });
+
+test("une catégorie sans article dans la liste reste gérable mais ne s'affiche pas", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.fill("#new-category-name", "Fruits");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li")).toHaveCount(1);
+  await page.fill("#new-category-name", "Légumes");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li")).toHaveCount(2);
+  await page.keyboard.press("Escape");
+
+  // Un seul article, dans "Fruits" : "Légumes" n'a rien à montrer et ne
+  // doit pas encombrer la liste avec un en-tête vide.
+  await page.selectOption("#add-category", { label: "Fruits" });
+  await page.fill("#add-input", "Pommes");
+  await page.click(".add-submit");
+
+  await expect(page.locator(".category-name")).toHaveText(["Fruits"]);
+  await expect(page.locator(".category-section")).toHaveCount(1);
+
+  // Les deux catégories restent proposables/gérables ailleurs.
+  await expect(page.locator("#add-category option")).toHaveText(["Sans catégorie", "Fruits", "Légumes"]);
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await expect(page.locator(".cat-name")).toHaveText(["Fruits", "Légumes"]);
+});

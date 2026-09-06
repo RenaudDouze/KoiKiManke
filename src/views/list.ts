@@ -656,10 +656,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       groups.push({ id: null, name: "Sans catégorie", items: uncategorized, showHeader: true });
     }
 
-    // En recherche, une catégorie sans résultat n'a rien à montrer — pas la
-    // peine de garder son en-tête visible. Sans recherche, on la garde
-    // (même vide) pour que l'utilisateur sache qu'elle existe.
-    if (query) groups = groups.filter((g) => g.items.length > 0);
+    // Une catégorie sans article (dans cette liste, ou ne correspondant pas
+    // à la recherche en cours) n'a rien à montrer — elle reste gérable via
+    // "Gérer les catégories", mais son en-tête n'encombre pas la liste tant
+    // qu'elle est vide.
+    groups = groups.filter((g) => g.items.length > 0);
 
     if (groups.length === 0 && query) {
       container.innerHTML = `<div class="empty-state">Aucun article ne correspond à « ${escapeHtml(searchQuery.trim())} ».</div>`;

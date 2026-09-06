@@ -37,6 +37,15 @@ Cloudflare (Workers + Durable Objects, sans base de données externe).
 - **Accessibilité** : focus piégé et restauré dans les modales, navigation
   clavier.
 
+## Confidentialité
+
+Le seul contrôle d'accès à une liste est son code à 6 caractères : il n'y a
+ni compte, ni mot de passe, ni chiffrement des données stockées. Toute
+personne qui obtient le code peut voir et modifier la liste. Cette
+application n'est donc pas conçue pour des informations personnelles ou
+sensibles — un rappel affiché sur l'écran d'accueil le précise aux
+utilisateurs.
+
 ## Stack technique
 
 - [Cloudflare Workers](https://developers.cloudflare.com/workers/) +

@@ -36,6 +36,10 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
           <div class="logo">${icons.cart}</div>
           <h1>KoiKiManke</h1>
           <p class="tagline">Une liste de courses partagée, synchronisée en direct.</p>
+          <p class="tagline privacy-note">
+            Les données ne sont pas protégées : toute personne qui a le code peut voir et
+            modifier la liste. N'y mets pas d'informations personnelles ou sensibles.
+          </p>
         </header>
 
         ${

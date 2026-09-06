@@ -12,11 +12,40 @@ import { openShareModal } from "../components/shareModal";
 import { exportListState, parseImportFile } from "../lib/importExport";
 import { icons } from "../lib/icons";
 import { trapFocus } from "../lib/focusTrap";
-import { categoryHue } from "../lib/color";
+import { resolveCategoryHue } from "../lib/color";
 import { alnumCompare } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
+
+// Palette de teintes proposées pour la couleur manuelle d'une catégorie
+// (voir colorPaletteHtml) — un choix curé plutôt qu'un sélecteur de couleur
+// libre, pour rester cohérent avec le rendu HSL (saturation/luminosité
+// fixes) utilisé partout ailleurs pour l'accent de couleur automatique.
+const CATEGORY_COLOR_HUES: readonly { hue: number; name: string }[] = [
+  { hue: 0, name: "Rouge" },
+  { hue: 30, name: "Orange" },
+  { hue: 60, name: "Jaune" },
+  { hue: 90, name: "Citron vert" },
+  { hue: 120, name: "Vert" },
+  { hue: 150, name: "Émeraude" },
+  { hue: 180, name: "Turquoise" },
+  { hue: 210, name: "Bleu ciel" },
+  { hue: 240, name: "Bleu" },
+  { hue: 270, name: "Indigo" },
+  { hue: 300, name: "Violet" },
+  { hue: 330, name: "Rose" },
+];
+
+function colorPaletteHtml(category: Category): string {
+  const autoSelected = category.color === undefined;
+  const autoSwatch = `<button type="button" class="color-swatch color-swatch-auto${autoSelected ? " selected" : ""}" data-color="auto" aria-label="Couleur automatique" aria-pressed="${autoSelected}">Auto</button>`;
+  const hueSwatches = CATEGORY_COLOR_HUES.map(({ hue, name }) => {
+    const selected = category.color === hue;
+    return `<button type="button" class="color-swatch${selected ? " selected" : ""}" data-color="${hue}" style="--swatch-hue: ${hue}" aria-label="${name}" aria-pressed="${selected}"></button>`;
+  }).join("");
+  return `<div class="color-palette">${autoSwatch}${hueSwatches}</div>`;
+}
 
 export function mountListView(root: HTMLElement, code: string, navigate: (path: string) => void): () => void {
   let state: ListState | null = getCachedListState(code);
@@ -351,6 +380,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     if (!state) return;
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
+    let openPaletteFor: string | null = null;
     const render = () => {
       overlay.innerHTML = `
         <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
@@ -361,10 +391,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
               .sort((a, b) => a.order - b.order)
               .map(
                 (c) => `
-              <li data-id="${c.id}" style="--cat-hue: ${categoryHue(c.id)}">
-                <span class="category-dot" aria-hidden="true"></span>
-                <span class="cat-name" data-id="${c.id}">${escapeHtml(c.name)}</span>
-                <button class="icon-btn" data-action="del" data-id="${c.id}" aria-label="Supprimer">${icons.trash}</button>
+              <li data-id="${c.id}">
+                <div class="cat-row" style="--cat-hue: ${resolveCategoryHue(c)}">
+                  <button type="button" class="category-dot color-swatch-toggle" data-id="${c.id}" aria-label="Changer la couleur de « ${escapeHtml(c.name)} »" aria-expanded="${openPaletteFor === c.id}"></button>
+                  <span class="cat-name" data-id="${c.id}">${escapeHtml(c.name)}</span>
+                  <button class="icon-btn" data-action="del" data-id="${c.id}" aria-label="Supprimer">${icons.trash}</button>
+                </div>
+                ${openPaletteFor === c.id ? colorPaletteHtml(c) : ""}
               </li>`,
               )
               .join("")}
@@ -384,6 +417,23 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
               if (value) conn.send({ type: "renameCategory", id: el.dataset.id!, name: value });
             },
           });
+        });
+      });
+      overlay.querySelectorAll<HTMLElement>(".color-swatch-toggle").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.dataset.id!;
+          openPaletteFor = openPaletteFor === id ? null : id;
+          render();
+        });
+      });
+      overlay.querySelectorAll<HTMLElement>(".color-swatch").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.closest("li")?.dataset.id;
+          if (!id) return;
+          const raw = btn.dataset.color!;
+          conn.send({ type: "setCategoryColor", id, color: raw === "auto" ? null : Number(raw) });
+          openPaletteFor = null;
+          render();
         });
       });
       overlay.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
@@ -661,13 +711,19 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       [...items].sort((a, b) => Number(a.checked) - Number(b.checked) || a.order - b.order);
 
     const cats = [...state.categories].sort((a, b) => a.order - b.order);
-    type Group = { id: string | null; name: string; items: Item[]; showHeader: boolean };
-    let groups: Group[] = cats.map((c) => ({ id: c.id, name: c.name, items: sortItems(byCategory(c.id)), showHeader: true }));
+    type Group = { id: string | null; name: string; items: Item[]; showHeader: boolean; hue: number };
+    let groups: Group[] = cats.map((c) => ({
+      id: c.id,
+      name: c.name,
+      items: sortItems(byCategory(c.id)),
+      showHeader: true,
+      hue: resolveCategoryHue(c),
+    }));
     const uncategorized = sortItems(byCategory(null));
     if (cats.length === 0) {
-      groups.unshift({ id: null, name: "Articles", items: uncategorized, showHeader: false });
+      groups.unshift({ id: null, name: "Articles", items: uncategorized, showHeader: false, hue: 0 });
     } else if (uncategorized.length > 0) {
-      groups.push({ id: null, name: "Sans catégorie", items: uncategorized, showHeader: true });
+      groups.push({ id: null, name: "Sans catégorie", items: uncategorized, showHeader: true, hue: 0 });
     }
 
     // Une catégorie sans article (dans cette liste, ou ne correspondant pas
@@ -693,7 +749,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     container.innerHTML = groups
       .map(
         (g) => `
-      <section class="category-section${g.id ? " has-color" : ""}" data-category-id="${g.id ?? ""}" ${g.id ? `style="--cat-hue: ${categoryHue(g.id)}"` : ""}>
+      <section class="category-section${g.id ? " has-color" : ""}" data-category-id="${g.id ?? ""}" ${g.id ? `style="--cat-hue: ${g.hue}"` : ""}>
         ${
           g.showHeader
             ? `<header class="category-header">

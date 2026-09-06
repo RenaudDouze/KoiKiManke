@@ -4,6 +4,10 @@ export interface Category {
   id: string;
   name: string;
   order: number;
+  /** Hue (0-359) chosen by the user, from a curated palette (see
+   * src/views/list.ts's colorPaletteHtml). Unset = automatic, deterministic
+   * hue derived from the category id (see src/lib/color.ts). */
+  color?: number;
 }
 
 export interface Item {
@@ -54,6 +58,7 @@ export type ClientMessage =
   | { type: "renameCategory"; id: string; name: string }
   | { type: "deleteCategory"; id: string }
   | { type: "reorderCategories"; orderedIds: string[] }
+  | { type: "setCategoryColor"; id: string; color: number | null }
   | { type: "importState"; mode: "merge" | "replace"; data: Pick<ListState, "items" | "categories" | "history" | "name"> }
   | { type: "deleteHistoryEntry"; key: string }
   | { type: "updateHistoryEntry"; key: string; label?: string; categoryId?: string | null }

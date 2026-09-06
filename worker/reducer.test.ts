@@ -347,6 +347,34 @@ describe("applyMessage", () => {
       expect(state.categories.find((c) => c.id === "c2")!.order).toBe(0);
       expect(state.categories.find((c) => c.id === "c3")!.order).toBe(9);
     });
+
+    describe("setCategoryColor", () => {
+      it("fixe une couleur manuelle (teinte valide)", () => {
+        const state = makeState({ categories: [{ id: "c1", name: "Fruits", order: 0 }] });
+        applyMessage(state, { type: "setCategoryColor", id: "c1", color: 210 }, NOW);
+        expect(state.categories[0].color).toBe(210);
+      });
+
+      it("efface la couleur manuelle (retour à l'automatique) quand color est null", () => {
+        const state = makeState({ categories: [{ id: "c1", name: "Fruits", order: 0, color: 210 }] });
+        applyMessage(state, { type: "setCategoryColor", id: "c1", color: null }, NOW);
+        expect(state.categories[0].color).toBeUndefined();
+      });
+
+      it("ignore un id inconnu", () => {
+        const state = makeState({ categories: [{ id: "c1", name: "Fruits", order: 0 }] });
+        applyMessage(state, { type: "setCategoryColor", id: "nope", color: 210 }, NOW);
+        expect(state.categories[0].color).toBeUndefined();
+      });
+
+      it("ignore une teinte hors de [0, 360[ ou non entière", () => {
+        const state = makeState({ categories: [{ id: "c1", name: "Fruits", order: 0 }] });
+        applyMessage(state, { type: "setCategoryColor", id: "c1", color: -1 }, NOW);
+        applyMessage(state, { type: "setCategoryColor", id: "c1", color: 360 }, NOW);
+        applyMessage(state, { type: "setCategoryColor", id: "c1", color: 45.5 }, NOW);
+        expect(state.categories[0].color).toBeUndefined();
+      });
+    });
   });
 
   describe("importState", () => {

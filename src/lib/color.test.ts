@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { categoryHue } from "./color";
+import { categoryHue, resolveCategoryHue } from "./color";
 
 describe("categoryHue", () => {
   it("est déterministe pour un même id", () => {
@@ -16,5 +16,16 @@ describe("categoryHue", () => {
 
   it("des ids différents donnent (généralement) des teintes différentes", () => {
     expect(categoryHue("fruits")).not.toBe(categoryHue("legumes"));
+  });
+});
+
+describe("resolveCategoryHue", () => {
+  it("utilise la couleur manuelle quand elle est définie", () => {
+    expect(resolveCategoryHue({ id: "c1", name: "Fruits", order: 0, color: 210 })).toBe(210);
+  });
+
+  it("retombe sur la teinte automatique quand aucune couleur n'est définie", () => {
+    const category = { id: "c1", name: "Fruits", order: 0 };
+    expect(resolveCategoryHue(category)).toBe(categoryHue("c1"));
   });
 });

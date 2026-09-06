@@ -43,7 +43,17 @@ jobs:
           # trouver l'API et le WebSocket. Valeur de repli : l'URL
           # *.workers.dev par défaut du Worker actuellement déployé.
           VITE_SYNC_WORKER_URL: ${{ vars.DEPLOY_URL || 'https://koikimanke.douzem.workers.dev' }}
+          # Un dépôt de projet (pas <user>.github.io) est servi sous
+          # /<nom-du-dépôt>/ plutôt qu'à la racine du domaine : voir `base`
+          # dans vite.config.ts et src/lib/basePath.ts.
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
         run: npm run build
+      - name: Fallback SPA (routes /l/CODE rechargées ou ouvertes directement)
+        # GitHub Pages n'a pas d'équivalent au `not_found_handling:
+        # single-page-application` de Cloudflare : sans ceci, ouvrir ou
+        # recharger un lien partagé donnerait un 404 au lieu de servir l'app,
+        # qui route elle-même via location.pathname une fois chargée.
+        run: cp dist/client/index.html dist/client/404.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

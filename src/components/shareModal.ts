@@ -2,9 +2,10 @@ import { renderQrSvg } from "./qr";
 import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { trapFocus } from "../lib/focusTrap";
+import { appPath } from "../lib/basePath";
 
 export function openShareModal(code: string, listName: string): void {
-  const url = `${location.origin}/l/${code}`;
+  const url = `${location.origin}${appPath(`/l/${code}`)}`;
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `

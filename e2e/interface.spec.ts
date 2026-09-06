@@ -155,3 +155,52 @@ test("ajouter un article depuis une suggestion dont la catégorie a été suppri
   await expect(page.locator(".item-name")).toHaveText("Pommes");
   await expect(page.locator(".empty-state")).toHaveCount(0);
 });
+
+test("gérer les suggestions : renommer, changer de catégorie, supprimer puis annuler", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.fill("#new-category-name", "Fruits");
+  await page.click("#new-category-form button[type=submit]");
+  await page.keyboard.press("Escape");
+
+  // Crée une suggestion "Pommes" (sans catégorie) en cochant l'article.
+  await page.fill("#add-input", "Pommes");
+  await page.click(".add-submit");
+  await page.locator(".item-check").check();
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-suggestions"]');
+  await expect(page.locator(".suggestion-name")).toHaveText("Pommes");
+
+  // Renomme "Pommes" en "Poires" et lui assigne la catégorie "Fruits".
+  await page.locator(".suggestion-name").click();
+  await page.locator(".modal .inline-edit").fill("Poires");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".suggestion-name")).toHaveText("Poires");
+  await page.selectOption(".suggestion-category", { label: "Fruits" });
+  await page.keyboard.press("Escape");
+
+  // La suggestion mise à jour se retrouve dans les chips, catégorisée.
+  await expect(page.locator("#quick-add .chip")).toHaveText(["+ Poires"]);
+  await page.click("#quick-add .chip");
+  await expect(page.locator(".category-section.has-color .item-name")).toHaveText("Poires");
+
+  // Supprimer la suggestion puis annuler la restaure.
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-suggestions"]');
+  await page.click('[data-action="del"]');
+  await expect(page.locator(".manage-suggestion-list li")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await expect(page.locator("#undo-toast")).toContainText("« Poires » supprimée");
+  await page.click("#undo-toast button");
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-suggestions"]');
+  await expect(page.locator(".suggestion-name")).toHaveText("Poires");
+});

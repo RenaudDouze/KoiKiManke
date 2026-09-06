@@ -179,6 +179,15 @@ button:focus-visible {
   margin-top: 0.4rem;
 }
 
+/* Rappel compact directement sous les champs où on saisit des données
+   (nom de liste, article), en complément du message plus complet affiché
+   sur l'accueil et en bas de la vue liste. */
+.add-form-hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin: 0.4rem 0 0;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

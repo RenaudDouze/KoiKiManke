@@ -68,6 +68,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
             <input id="create-name" type="text" placeholder="Nom de la liste (optionnel)" maxlength="60" />
             <button type="submit" class="btn primary">Créer</button>
           </form>
+          <p class="add-form-hint">Non protégé : évite les informations personnelles ou sensibles.</p>
         </section>
 
         <section class="card">

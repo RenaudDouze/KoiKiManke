@@ -750,6 +750,19 @@ button:focus-visible {
   max-width: 40%;
 }
 
+.suggestion-favorite {
+  color: var(--text-muted);
+}
+
+.suggestion-favorite[aria-pressed="true"] {
+  color: var(--favorite);
+}
+
+.suggestion-search {
+  width: 100%;
+  margin-bottom: 0.8rem;
+}
+
 .toast {
   position: fixed;
   bottom: 1.2rem;

@@ -418,50 +418,45 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     if (!state) return;
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
-    const render = () => {
-      const entries = [...state!.history].sort((a, b) => b.useCount - a.useCount || b.lastUsed - a.lastUsed);
-      overlay.innerHTML = `
-        <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-          <button class="icon-btn modal-close" aria-label="Fermer">${icons.close}</button>
-          <h2>Suggestions</h2>
-          ${
-            entries.length === 0
-              ? `<p class="hint">Aucune suggestion pour l'instant : elles apparaissent une fois qu'un article a été coché.</p>`
-              : `<ul class="manage-category-list manage-suggestion-list">
-                  ${entries
-                    .map(
-                      (h) => `
-                    <li data-key="${escapeHtml(h.key)}">
-                      <span class="suggestion-name" data-key="${escapeHtml(h.key)}">${escapeHtml(h.label)}</span>
-                      <select class="suggestion-category" data-key="${escapeHtml(h.key)}" aria-label="Catégorie de « ${escapeHtml(h.label)} »">
-                        ${categoryOptionsHtml(state!.categories, h.categoryId)}
-                      </select>
-                      <button class="icon-btn" data-action="del" data-key="${escapeHtml(h.key)}" aria-label="Supprimer la suggestion « ${escapeHtml(h.label)} »">${icons.trash}</button>
-                    </li>`,
-                    )
-                    .join("")}
-                </ul>`
-          }
-        </div>
-      `;
-      overlay.querySelector(".modal-close")?.addEventListener("click", close);
-      overlay.querySelectorAll<HTMLElement>(".suggestion-name").forEach((el) => {
+    let searchQuery = "";
+
+    const sortEntries = (a: HistoryEntry, b: HistoryEntry) => b.useCount - a.useCount || b.lastUsed - a.lastUsed;
+
+    const suggestionRowHtml = (h: HistoryEntry): string => `
+      <li data-key="${escapeHtml(h.key)}">
+        <button type="button" class="icon-btn suggestion-favorite" data-action="fav" data-key="${escapeHtml(h.key)}" aria-label="${h.favorite ? "Retirer des favoris" : "Ajouter aux favoris"}" aria-pressed="${h.favorite ? "true" : "false"}">
+          ${h.favorite ? icons.starFilled : icons.star}
+        </button>
+        <span class="suggestion-name" data-key="${escapeHtml(h.key)}">${escapeHtml(h.label)}</span>
+        <select class="suggestion-category" data-key="${escapeHtml(h.key)}" aria-label="Catégorie de « ${escapeHtml(h.label)} »">
+          ${categoryOptionsHtml(state!.categories, h.categoryId)}
+        </select>
+        <button class="icon-btn" data-action="del" data-key="${escapeHtml(h.key)}" aria-label="Supprimer la suggestion « ${escapeHtml(h.label)} »">${icons.trash}</button>
+      </li>`;
+
+    const wireRows = (container: Element): void => {
+      container.querySelectorAll<HTMLElement>(".suggestion-name").forEach((el) => {
         el.addEventListener("click", () => {
           startEdit(el, {
             value: el.textContent || "",
             onCommit: (value) => {
               if (value) conn.send({ type: "updateHistoryEntry", key: el.dataset.key!, label: value });
-              else render();
+              else renderList();
             },
           });
         });
       });
-      overlay.querySelectorAll<HTMLSelectElement>(".suggestion-category").forEach((sel) => {
+      container.querySelectorAll<HTMLSelectElement>(".suggestion-category").forEach((sel) => {
         sel.addEventListener("change", () => {
           conn.send({ type: "updateHistoryEntry", key: sel.dataset.key!, categoryId: sel.value || null });
         });
       });
-      overlay.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
+      container.querySelectorAll<HTMLElement>('[data-action="fav"]').forEach((btn) => {
+        btn.addEventListener("click", () => {
+          conn.send({ type: "toggleFavoriteHistoryEntry", key: btn.dataset.key! });
+        });
+      });
+      container.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
         btn.addEventListener("click", () => {
           const key = btn.dataset.key!;
           const entry = state!.history.find((h) => h.key === key);
@@ -471,6 +466,59 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         });
       });
     };
+
+    // Ne touche qu'au conteneur de la liste, jamais au champ de recherche
+    // lui-même : sinon il perdrait le focus à chaque frappe (ce handler
+    // tourne aussi bien sur "input" que sur les mises à jour reçues du
+    // serveur pendant que l'utilisateur tape).
+    const renderList = (): void => {
+      const container = overlay.querySelector("#suggestion-list");
+      if (!container) return;
+      if (state!.history.length === 0) {
+        container.innerHTML = `<p class="hint">Aucune suggestion pour l'instant : elles apparaissent une fois qu'un article a été coché.</p>`;
+        return;
+      }
+      const q = searchQuery.trim().toLowerCase();
+      const matches = (h: HistoryEntry) => !q || h.label.toLowerCase().includes(q);
+      const favorites = state!.history.filter((h) => h.favorite && matches(h)).sort(sortEntries);
+      const others = state!.history.filter((h) => !h.favorite && matches(h)).sort(sortEntries);
+      if (favorites.length === 0 && others.length === 0) {
+        container.innerHTML = `<p class="hint">Aucune suggestion ne correspond à « ${escapeHtml(searchQuery.trim())} ».</p>`;
+        return;
+      }
+      container.innerHTML = `
+        ${favorites.length ? `<h3 class="recent-subheading">Favoris</h3><ul class="manage-category-list manage-suggestion-list">${favorites.map(suggestionRowHtml).join("")}</ul>` : ""}
+        ${
+          others.length
+            ? `${favorites.length ? '<h3 class="recent-subheading">Autres</h3>' : ""}<ul class="manage-category-list manage-suggestion-list">${others.map(suggestionRowHtml).join("")}</ul>`
+            : ""
+        }
+      `;
+      wireRows(container);
+    };
+
+    const renderShell = (): void => {
+      overlay.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+          <button class="icon-btn modal-close" aria-label="Fermer">${icons.close}</button>
+          <h2>Suggestions</h2>
+          ${
+            state!.history.length > 0
+              ? `<input type="text" id="suggestion-search" class="suggestion-search" placeholder="Rechercher…" aria-label="Rechercher une suggestion" />`
+              : ""
+          }
+          <div id="suggestion-list"></div>
+        </div>
+      `;
+      overlay.querySelector(".modal-close")?.addEventListener("click", close);
+      const searchInput = overlay.querySelector<HTMLInputElement>("#suggestion-search");
+      searchInput?.addEventListener("input", () => {
+        searchQuery = searchInput.value;
+        renderList();
+      });
+      renderList();
+    };
+
     const close = () => {
       overlay.remove();
       unsubscribe();
@@ -484,9 +532,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       if (e.target === overlay) close();
     });
     document.addEventListener("keydown", onKeydown);
-    const unsubscribe = conn.onState(() => render());
+    const unsubscribe = conn.onState(() => renderList());
     document.body.appendChild(overlay);
-    render();
+    renderShell();
     const releaseFocusTrap = trapFocus(overlay);
   }
 

@@ -36,8 +36,13 @@ export function touchHistory(state: ListState, label: string, categoryId: string
     state.history.push({ key, label, categoryId, useCount: 1, lastUsed: now });
   }
   if (state.history.length > MAX_HISTORY) {
-    state.history.sort((a, b) => b.lastUsed - a.lastUsed);
-    state.history.length = MAX_HISTORY;
+    // Favoris exemptés de l'éviction : gardés quel que soit leur lastUsed,
+    // même si ça dépasse MAX_HISTORY (cas limite acceptable — l'utilisateur
+    // a explicitement demandé à les garder).
+    const favorites = state.history.filter((h) => h.favorite);
+    const rest = state.history.filter((h) => !h.favorite).sort((a, b) => b.lastUsed - a.lastUsed);
+    const keptRest = rest.slice(0, Math.max(0, MAX_HISTORY - favorites.length));
+    state.history = [...favorites, ...keptRest].sort((a, b) => b.lastUsed - a.lastUsed);
   }
 }
 
@@ -215,6 +220,13 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
           entry.label = label;
         }
       }
+      return;
+    }
+
+    case "toggleFavoriteHistoryEntry": {
+      const entry = state.history.find((h) => h.key === msg.key);
+      if (!entry) return;
+      entry.favorite = !entry.favorite;
       return;
     }
 

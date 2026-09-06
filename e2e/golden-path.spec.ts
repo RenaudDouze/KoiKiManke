@@ -39,20 +39,14 @@ test("parcours complet : créer, ajouter avec quantité, catégoriser, cocher, p
   await page.locator(".item", { has: page.locator(".item-name", { hasText: "Lait" }) }).locator(".item-check").check();
   await expect(page.locator(".item.checked .item-name", { hasText: "Lait" })).toBeVisible();
 
-  // Partage : code affiché + QR code généré
+  // Partage : code affiché + QR code généré, export/import accessibles
+  // depuis la même modale.
   await page.click("#btn-share");
   await expect(page.locator(".share-modal .share-code")).not.toBeEmpty();
   await expect(page.locator(".share-modal .qr-wrap svg")).toBeVisible();
-  await page.click(".modal-close");
 
   // Export puis import (fusion) dans une nouvelle liste
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    (async () => {
-      await page.click("#btn-menu");
-      await page.click('[data-action="export"]');
-    })(),
-  ]);
+  const [download] = await Promise.all([page.waitForEvent("download"), page.click("#share-export")]);
   const exportPath = await download.path();
   expect(exportPath).toBeTruthy();
 
@@ -60,9 +54,9 @@ test("parcours complet : créer, ajouter avec quantité, catégoriser, cocher, p
   await page.click("#create-form button[type=submit]");
   await page.waitForURL(/\/l\//);
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
-  await page.click("#btn-menu");
-  await page.click('[data-action="import"]');
-  await page.setInputFiles("#import-file", exportPath!);
+  await page.click("#btn-share");
+  await page.click("#share-import");
+  await page.setInputFiles("#share-import-file", exportPath!);
   await page.click("#import-merge");
   await expect(page.locator(".item-name", { hasText: "pommes" })).toBeVisible();
   await expect(page.locator(".item-name", { hasText: "Bananes" })).toBeVisible();

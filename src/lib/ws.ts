@@ -1,4 +1,5 @@
 import type { ClientMessage, ServerMessage, ListState } from "../../shared/types";
+import { wsUrl } from "./syncWorker";
 
 type StateListener = (state: ListState) => void;
 type PresenceListener = (names: string[]) => void;
@@ -23,8 +24,7 @@ export class ListConnection {
 
   connect(): void {
     this.closedByUser = false;
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${proto}//${location.host}/api/lists/${encodeURIComponent(this.code)}/ws?name=${encodeURIComponent(this.participantName)}`;
+    const url = wsUrl(`/api/lists/${encodeURIComponent(this.code)}/ws?name=${encodeURIComponent(this.participantName)}`);
     const ws = new WebSocket(url);
     this.ws = ws;
 

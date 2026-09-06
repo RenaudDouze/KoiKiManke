@@ -159,6 +159,33 @@ describe("GET /api/lists/:code/ws", () => {
   });
 });
 
+describe("CORS (client cross-origine, ex: GitHub Pages)", () => {
+  it("répond au préflight OPTIONS sur /api/* sans toucher le Durable Object", async () => {
+    const env = makeEnv(() => {
+      throw new Error("le Durable Object ne devrait pas être appelé");
+    });
+    const res = await worker.fetch(req("https://app.example/api/lists", { method: "OPTIONS" }), env);
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    expect(res.headers.get("access-control-allow-methods")).toBe("GET, POST, OPTIONS");
+    expect(res.headers.get("access-control-allow-headers")).toBe("content-type");
+  });
+
+  it("ajoute les en-têtes CORS aux réponses JSON de l'API", async () => {
+    const handler: FakeHandler = () =>
+      Response.json({ code: "ABCDEF", name: "Courses", items: [], categories: [], history: [], createdAt: 0, updatedAt: 0 });
+    const env = makeEnv(handler);
+    const res = await worker.fetch(req("https://app.example/api/lists/abcdef"), env);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+
+  it("ajoute les en-têtes CORS au 404 générique de l'API", async () => {
+    const env = makeEnv(() => new Response("not found", { status: 404 }));
+    const res = await worker.fetch(req("https://app.example/api/nope"), env);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+});
+
 describe("routes non gérées", () => {
   it("renvoie 404 pour un chemin /api/* inconnu", async () => {
     const env = makeEnv(() => new Response("not found", { status: 404 }));

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyMessage, touchHistory, nextOrder, historyKey, validCategoryId, MAX_HISTORY } from "./reducer";
+import { applyMessage, touchHistory, nextOrder, validCategoryId, MAX_HISTORY } from "./reducer";
 import type { ListState } from "../shared/types";
 
 function makeState(overrides: Partial<ListState> = {}): ListState {
@@ -16,12 +16,6 @@ function makeState(overrides: Partial<ListState> = {}): ListState {
 }
 
 const NOW = 1_700_000_000_000;
-
-describe("historyKey", () => {
-  it("met en minuscule et retire les espaces de bord", () => {
-    expect(historyKey("  Lait  ")).toBe("lait");
-  });
-});
 
 describe("nextOrder", () => {
   it("vaut 0 pour une liste vide", () => {

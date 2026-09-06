@@ -8,6 +8,7 @@ import { escapeHtml } from "../lib/dom";
 import { startEdit } from "../lib/editable";
 import { wireConfirmClick } from "../lib/confirmClick";
 import { enableDragReorder } from "../lib/dnd";
+import { enableSwipeToDelete } from "../lib/swipe";
 import { openShareModal } from "../components/shareModal";
 import { exportListState, parseImportFile } from "../lib/importExport";
 import { icons } from "../lib/icons";
@@ -15,6 +16,9 @@ import { trapFocus } from "../lib/focusTrap";
 import { resolveCategoryHue } from "../lib/color";
 import { alnumCompare } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
+import { cycleItemSortPreference, getItemSortPreference, itemSortLabel } from "../lib/itemSortPreference";
+import { getDeviceName } from "../lib/presence";
+import { historyKey } from "../../shared/historyKey";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
@@ -55,12 +59,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   let loadError = false;
   let disposeItemDnd: (() => void) | null = null;
   let disposeCategoryDnd: (() => void) | null = null;
+  let disposeSwipe: (() => void) | null = null;
   let shellMounted = false;
   let searchQuery = "";
   // null = pas encore évalué (évite de célébrer à l'ouverture d'une liste
   // déjà entièrement cochée) ; sinon, reflète l'état à la dernière vérification.
   let wasFullyChecked: boolean | null = null;
-  const conn = new ListConnection(code);
+  const conn = new ListConnection(code, getDeviceName());
 
   const UNDO_TIMEOUT_MS = 5000;
   const MAX_UNDO_STACK = 10;
@@ -131,6 +136,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   conn.onState(onStateUpdate);
+  conn.onPresence((names) => renderPresence(names));
   conn.onConnectionChange((isConnected) => {
     connected = isConnected;
     updateConnDot();
@@ -240,10 +246,34 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     dot.setAttribute("title", connected ? "Synchronisé" : "Connexion…");
   }
 
+  function renderPresence(names: string[]): void {
+    const countEl = root.querySelector("#presence-count");
+    if (countEl) countEl.textContent = String(names.length);
+    const panel = root.querySelector("#presence-panel");
+    if (!panel) return;
+    const ownName = getDeviceName();
+    if (names.length === 0) {
+      panel.innerHTML = "";
+      return;
+    }
+    const items = names.map((n) => (n === ownName ? "Toi" : n));
+    panel.innerHTML = `<ul class="presence-list">${items.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
+  }
+
   function wireHeader(): void {
     root.querySelector("#btn-home")?.addEventListener("click", () => navigate("/"));
     root.querySelector("#btn-share")?.addEventListener("click", () => {
       if (state) openShareModal(state.code, state.name);
+    });
+
+    const presenceBtn = root.querySelector("#btn-presence");
+    const presencePanel = root.querySelector("#presence-panel") as HTMLElement | null;
+    presenceBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (presencePanel) presencePanel.hidden = !presencePanel.hidden;
+    });
+    document.addEventListener("click", () => {
+      if (presencePanel) presencePanel.hidden = true;
     });
 
     const searchBar = root.querySelector("#search-bar") as HTMLElement | null;
@@ -295,6 +325,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     panel?.querySelector('[data-action="theme"]')?.addEventListener("click", (e) => {
       cycleThemePreference();
       updateThemeMenuItem(e.currentTarget as HTMLElement);
+    });
+    panel?.querySelector('[data-action="item-sort"]')?.addEventListener("click", (e) => {
+      cycleItemSortPreference();
+      updateItemSortMenuItem(e.currentTarget as HTMLElement);
+      renderCategories();
     });
     panel?.querySelector('[data-action="manage-categories"]')?.addEventListener("click", openCategoryManager);
     panel?.querySelector('[data-action="manage-suggestions"]')?.addEventListener("click", openSuggestionManager);
@@ -503,8 +538,26 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           startEdit(el, {
             value: el.textContent || "",
             onCommit: (value) => {
-              if (value) conn.send({ type: "updateHistoryEntry", key: el.dataset.key!, label: value });
-              else renderList();
+              if (!value) {
+                renderList();
+                return;
+              }
+              const oldKey = el.dataset.key!;
+              conn.send({ type: "updateHistoryEntry", key: oldKey, label: value });
+              // Retag this row's data-key immediately, without waiting for the
+              // round trip: a rename changes the entry's dedupe key (see
+              // historyKey/updateHistoryEntry in worker/reducer.ts), so an
+              // action fired right after (e.g. picking a category below)
+              // would otherwise still target the old, since-vanished key and
+              // be silently dropped by the server.
+              const newKey = historyKey(value);
+              if (newKey !== oldKey) {
+                el.closest("li")
+                  ?.querySelectorAll<HTMLElement>("[data-key]")
+                  .forEach((node) => {
+                    node.dataset.key = newKey;
+                  });
+              }
             },
           });
         });
@@ -705,10 +758,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     if (!container || !state) return;
 
     const query = searchQuery.trim().toLowerCase();
+    const alphabeticalItems = getItemSortPreference() === "alphabetical";
     const byCategory = (categoryId: string | null): Item[] =>
       state!.items.filter((i) => i.categoryId === categoryId && (!query || i.name.toLowerCase().includes(query)));
     const sortItems = (items: Item[]): Item[] =>
-      [...items].sort((a, b) => Number(a.checked) - Number(b.checked) || a.order - b.order);
+      [...items].sort(
+        (a, b) => Number(a.checked) - Number(b.checked) || (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
+      );
 
     const cats = [...state.categories].sort((a, b) => a.order - b.order);
     type Group = { id: string | null; name: string; items: Item[]; showHeader: boolean; hue: number };
@@ -736,6 +792,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       container.innerHTML = `<div class="empty-state">Aucun article ne correspond à « ${escapeHtml(searchQuery.trim())} ».</div>`;
       disposeItemDnd?.();
       disposeCategoryDnd?.();
+      disposeSwipe?.();
       return;
     }
 
@@ -743,6 +800,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       container.innerHTML = `<div class="empty-state">Ta liste est vide. Ajoute un premier article ci-dessus 👆</div>`;
       disposeItemDnd?.();
       disposeCategoryDnd?.();
+      disposeSwipe?.();
       return;
     }
 
@@ -826,7 +884,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     disposeItemDnd?.();
     disposeCategoryDnd?.();
+    disposeSwipe?.();
 
+    // Le glisser-déposer reste actif même en tri alphabétique : il permet
+    // toujours de déplacer un article vers une autre catégorie. Seul le
+    // repositionnement au sein d'une même catégorie n'a plus d'effet visuel
+    // durable (le prochain rendu retrie par ordre alphabétique).
     disposeItemDnd = enableDragReorder(container, {
       containerSelector: ".item-list",
       itemSelector: ".item",
@@ -855,16 +918,36 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         conn.send({ type: "reorderCategories", orderedIds });
       },
     });
+
+    disposeSwipe = enableSwipeToDelete(container, {
+      itemSelector: ".item",
+      contentSelector: ".item-content",
+      ignoreSelector: ".item-drag-handle, .item-check, .item-delete",
+      onDelete: (el) => {
+        const item = state!.items.find((i) => i.id === el.dataset.id);
+        if (!item) return;
+        conn.send({ type: "deleteItem", id: item.id });
+        pushUndo(`« ${item.name} » supprimé`, () => conn.send({ type: "restoreItems", items: [item] }));
+      },
+    });
   }
 
   function itemRowHtml(item: Item): string {
+    // La poignée reste utile même en tri alphabétique : elle permet de
+    // déplacer un article vers une autre catégorie (le seul autre moyen
+    // étant de le supprimer puis de le rajouter). Seul le repositionnement
+    // au sein d'une même catégorie devient sans effet visuel dans ce mode
+    // (l'ordre est alors recalculé à chaque rendu).
     return `
       <li class="item ${item.checked ? "checked" : ""}" data-id="${item.id}">
-        <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
-        <input type="checkbox" class="item-check" data-id="${item.id}" ${item.checked ? "checked" : ""} />
-        <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${item.id}">${escapeHtml(item.quantity) || "+"}</span>
-        <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
-        <button class="icon-btn item-delete" data-action="delete-item" data-id="${item.id}" aria-label="Supprimer">${icons.trash}</button>
+        <div class="item-swipe-bg" aria-hidden="true">${icons.trash}</div>
+        <div class="item-content">
+          <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
+          <input type="checkbox" class="item-check" data-id="${item.id}" ${item.checked ? "checked" : ""} />
+          <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${item.id}">${escapeHtml(item.quantity) || "+"}</span>
+          <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
+          <button class="icon-btn item-delete" data-action="delete-item" data-id="${item.id}" aria-label="Supprimer">${icons.trash}</button>
+        </div>
       </li>
     `;
   }
@@ -882,11 +965,16 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <button class="icon-btn" id="btn-home" aria-label="Accueil">${icons.back}</button>
           <h1 class="list-title" id="list-title">${escapeHtml(s.name)}</h1>
           <span class="conn-dot ${isConnected ? "online" : ""}" id="conn-dot" title="${isConnected ? "Synchronisé" : "Connexion…"}"></span>
+          <button class="icon-btn presence-btn" id="btn-presence" aria-label="Personnes connectées">
+            ${icons.users}<span class="presence-count" id="presence-count">1</span>
+          </button>
+          <div class="menu-panel presence-panel" id="presence-panel" hidden></div>
           <button class="icon-btn" id="btn-search" aria-label="Rechercher">${icons.search}</button>
           <button class="icon-btn" id="btn-share" aria-label="Partager">${icons.share}</button>
           <button class="icon-btn" id="btn-menu" aria-label="Menu">${icons.more}</button>
           <div class="menu-panel" id="menu-panel" hidden>
             <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
+            <button type="button" data-action="item-sort">${itemSortMenuHtml(getItemSortPreference())}</button>
             <button type="button" data-action="manage-categories">Gérer les catégories</button>
             <button type="button" data-action="manage-suggestions">Gérer les suggestions</button>
             <button type="button" data-action="export">Exporter (JSON)</button>
@@ -931,6 +1019,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     button.innerHTML = themeMenuHtml(getThemePreference());
   }
 
+  function itemSortMenuHtml(pref: ReturnType<typeof getItemSortPreference>): string {
+    return `Tri des articles : ${itemSortLabel(pref)}`;
+  }
+
+  function updateItemSortMenuItem(button: HTMLElement): void {
+    button.textContent = itemSortMenuHtml(getItemSortPreference());
+  }
+
   function notFoundHtml(c: string): string {
     return `
       <div class="centered-message">
@@ -956,6 +1052,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     conn.disconnect();
     disposeItemDnd?.();
     disposeCategoryDnd?.();
+    disposeSwipe?.();
     clearUndoStack();
     document.querySelectorAll(".modal-overlay").forEach((el) => el.remove());
   };

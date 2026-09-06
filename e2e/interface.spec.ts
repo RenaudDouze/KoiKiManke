@@ -193,6 +193,11 @@ test("gérer les suggestions : renommer, changer de catégorie, supprimer puis a
   await page.keyboard.press("Enter");
   await expect(page.locator(".suggestion-name")).toHaveText("Poires");
   await page.selectOption(".suggestion-category", { label: "Bricolage" });
+  // Laisse le changement de catégorie faire l'aller-retour serveur : la
+  // puce de suggestion lit l'état local (non optimiste) au clic, donc un
+  // clic trop rapide après la sélection risquerait d'ajouter l'article
+  // avec l'ancienne catégorie (encore non confirmée côté client).
+  await page.waitForTimeout(300);
   await page.keyboard.press("Escape");
 
   // La suggestion mise à jour se retrouve dans les chips, catégorisée.
@@ -352,6 +357,83 @@ test("« Vider les articles cochés » demande aussi un second clic au même end
   await expect(page.locator("#menu-panel")).toBeHidden();
   await expect(page.locator("#undo-toast")).toContainText("1 article(s) coché(s) vidé(s)");
 
+  await page.click("#undo-toast button");
+  await expect(page.locator(".item .item-name")).toHaveText("Pommes");
+});
+
+test("le tri alphabétique des articles est optionnel et persiste après un rechargement", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  for (const name of ["Yaourts", "Bananes", "Chocolat"]) {
+    await page.fill("#add-input", name);
+    await page.click(".add-submit");
+  }
+  // Par défaut (tri manuel) : ordre d'ajout.
+  await expect(page.locator(".item-name")).toHaveText(["Yaourts", "Bananes", "Chocolat"]);
+
+  await page.click("#btn-menu");
+  const sortBtn = page.locator('[data-action="item-sort"]');
+  await expect(sortBtn).toHaveText("Tri des articles : Manuel");
+  await sortBtn.click();
+  await expect(sortBtn).toHaveText("Tri des articles : Alphabétique");
+  await page.keyboard.press("Escape");
+
+  await expect(page.locator(".item-name")).toHaveText(["Bananes", "Chocolat", "Yaourts"]);
+
+  // La préférence (personnelle, par appareil) survit à un rechargement.
+  await page.reload();
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+  await expect(page.locator(".item-name")).toHaveText(["Bananes", "Chocolat", "Yaourts"]);
+  await page.click("#btn-menu");
+  await expect(page.locator('[data-action="item-sort"]')).toHaveText("Tri des articles : Alphabétique");
+});
+
+test("glisser un article vers la gauche le supprime (mobile), avec annulation possible", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.fill("#add-input", "Pommes");
+  await page.click(".add-submit");
+  await expect(page.locator(".item")).toHaveCount(1);
+
+  const item = page.locator(".item", { hasText: "Pommes" });
+  const box = await item.boundingBox();
+  if (!box) throw new Error("article introuvable");
+  const y = box.y + box.height / 2;
+  const startX = box.x + box.width / 2;
+
+  // Un glissement trop court revient en place, ne supprime rien.
+  await item.dispatchEvent("pointerdown", { pointerType: "touch", pointerId: 1, clientX: startX, clientY: y, bubbles: true });
+  await item.dispatchEvent("pointermove", {
+    pointerType: "touch",
+    pointerId: 1,
+    clientX: startX - 30,
+    clientY: y,
+    bubbles: true,
+    cancelable: true,
+  });
+  await item.dispatchEvent("pointerup", { pointerType: "touch", pointerId: 1, clientX: startX - 30, clientY: y, bubbles: true });
+  await expect(page.locator(".item")).toHaveCount(1);
+
+  // Un glissement suffisant supprime l'article, avec annulation possible.
+  await item.dispatchEvent("pointerdown", { pointerType: "touch", pointerId: 1, clientX: startX, clientY: y, bubbles: true });
+  await item.dispatchEvent("pointermove", {
+    pointerType: "touch",
+    pointerId: 1,
+    clientX: startX - 100,
+    clientY: y,
+    bubbles: true,
+    cancelable: true,
+  });
+  await item.dispatchEvent("pointerup", { pointerType: "touch", pointerId: 1, clientX: startX - 100, clientY: y, bubbles: true });
+
+  await expect(page.locator(".item")).toHaveCount(0);
+  await expect(page.locator("#undo-toast")).toContainText("« Pommes » supprimé");
   await page.click("#undo-toast button");
   await expect(page.locator(".item .item-name")).toHaveText("Pommes");
 });

@@ -4,12 +4,9 @@
 
 import type { ListState, ClientMessage, Item, Category } from "../shared/types";
 import { parseFreeText } from "../shared/quantity";
+import { historyKey } from "../shared/historyKey";
 
 export const MAX_HISTORY = 300;
-
-export function historyKey(name: string): string {
-  return name.trim().toLowerCase();
-}
 
 export function nextOrder(list: { order: number }[]): number {
   return list.length === 0 ? 0 : Math.max(...list.map((x) => x.order)) + 1;

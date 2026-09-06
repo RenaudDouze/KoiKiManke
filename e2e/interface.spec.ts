@@ -247,8 +247,8 @@ test("gestion des suggestions : recherche et favoris", async ({ page }) => {
   await expect(page.locator(".recent-subheading")).toHaveText(["Favoris", "Autres"]);
   await expect(page.locator("#suggestion-list ul").first().locator(".suggestion-name")).toHaveText("Lait");
 
-  // La recherche filtre par nom (triées par coche la plus récente d'abord :
-  // "Poires" a été cochée après "Pommes").
+  // La recherche filtre par nom (suggestions toujours triées par ordre
+  // alphanumérique : "Poires" avant "Pommes").
   await page.fill("#suggestion-search", "po");
   await expect(page.locator(".suggestion-name")).toHaveText(["Poires", "Pommes"]);
 
@@ -332,21 +332,22 @@ test("une nouvelle liste propose des rayons par défaut, groupés à part des ca
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
 
   // Les rayons par défaut apparaissent d'emblée, groupés sous "Rayons",
-  // dans le sélecteur de catégorie du formulaire d'ajout.
+  // dans le sélecteur de catégorie du formulaire d'ajout — et toujours
+  // classés par ordre alphanumérique, jamais dans l'ordre de création.
   const rayonsGroup = page.locator('#add-category optgroup[label="Rayons"]');
   await expect(rayonsGroup.locator("option")).toHaveText([
-    "Fruits & Légumes",
+    "Animalerie",
+    "Bébé",
+    "Boissons",
     "Boucherie & Poissonnerie",
-    "Crèmerie",
     "Boulangerie & Pâtisserie",
+    "Crèmerie",
+    "Entretien & Maison",
     "Épicerie salée",
     "Épicerie sucrée",
-    "Surgelés",
-    "Boissons",
+    "Fruits & Légumes",
     "Hygiène & Beauté",
-    "Entretien & Maison",
-    "Bébé",
-    "Animalerie",
+    "Surgelés",
   ]);
   // Pas de groupe "Mes catégories" tant qu'aucune n'a été ajoutée.
   await expect(page.locator('#add-category optgroup[label="Mes catégories"]')).toHaveCount(0);

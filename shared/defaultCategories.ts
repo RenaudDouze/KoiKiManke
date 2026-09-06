@@ -22,25 +22,20 @@ export const DEFAULT_CATEGORY_NAMES: readonly string[] = [
 ];
 
 /** Construit les rayons par défaut d'une nouvelle liste. `makeId` fournit
- * l'identifiant de chaque catégorie (ex: crypto.randomUUID côté worker).
- * `startOrder` décale leur `order` (utile pour les ajouter après des
- * catégories déjà existantes, voir seedMissingDefaultCategories). */
-export function buildDefaultCategories(makeId: () => string, startOrder = 0): Category[] {
-  return DEFAULT_CATEGORY_NAMES.map((name, i) => ({
+ * l'identifiant de chaque catégorie (ex: crypto.randomUUID côté worker). */
+export function buildDefaultCategories(makeId: () => string): Category[] {
+  return DEFAULT_CATEGORY_NAMES.map((name) => ({
     id: makeId(),
     name,
-    order: startOrder + i,
     isDefault: true,
   }));
 }
 
 /** Migration pour les listes créées avant l'introduction des rayons par
- * défaut : les ajoute une seule fois, à la suite des catégories déjà
- * présentes. N'a aucun effet si la liste les a déjà (y compris si
- * l'utilisateur les a ensuite toutes supprimées). */
+ * défaut : les ajoute une seule fois. N'a aucun effet si la liste les a déjà
+ * (y compris si l'utilisateur les a ensuite toutes supprimées). */
 export function seedMissingDefaultCategories(state: ListState, makeId: () => string): void {
   if (state.defaultCategoriesSeeded) return;
   state.defaultCategoriesSeeded = true;
-  const startOrder = state.categories.length === 0 ? 0 : Math.max(...state.categories.map((c) => c.order)) + 1;
-  state.categories.push(...buildDefaultCategories(makeId, startOrder));
+  state.categories.push(...buildDefaultCategories(makeId));
 }

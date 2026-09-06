@@ -13,6 +13,7 @@ import { exportListState, parseImportFile } from "../lib/importExport";
 import { icons } from "../lib/icons";
 import { trapFocus } from "../lib/focusTrap";
 import { categoryHue } from "../lib/color";
+import { alnumCompare } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
@@ -24,7 +25,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   let notFound = false;
   let loadError = false;
   let disposeItemDnd: (() => void) | null = null;
-  let disposeCategoryDnd: (() => void) | null = null;
   let shellMounted = false;
   let searchQuery = "";
   // null = pas encore évalué (évite de célébrer à l'ouverture d'une liste
@@ -357,7 +357,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <h2>Catégories</h2>
           <ul class="manage-category-list">
             ${[...state!.categories]
-              .sort((a, b) => a.order - b.order)
+              .sort((a, b) => alnumCompare(a.name, b.name))
               .map(
                 (c) => `
               <li data-id="${c.id}" style="--cat-hue: ${categoryHue(c.id)}">
@@ -432,7 +432,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     overlay.className = "modal-overlay";
     let searchQuery = "";
 
-    const sortEntries = (a: HistoryEntry, b: HistoryEntry) => b.useCount - a.useCount || b.lastUsed - a.lastUsed;
+    const sortEntries = (a: HistoryEntry, b: HistoryEntry) => alnumCompare(a.label, b.label);
 
     const suggestionRowHtml = (h: HistoryEntry): string => `
       <li data-key="${escapeHtml(h.key)}">
@@ -642,9 +642,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   function suggestionPool(): HistoryEntry[] {
     if (!state) return [];
     const activeNames = new Set(state.items.filter((i) => !i.checked).map((i) => i.name.trim().toLowerCase()));
-    return [...state.history]
-      .filter((h) => !activeNames.has(h.key))
-      .sort((a, b) => b.useCount - a.useCount || b.lastUsed - a.lastUsed);
+    return [...state.history].filter((h) => !activeNames.has(h.key)).sort((a, b) => alnumCompare(a.label, b.label));
   }
 
   function addFromHistory(entry: HistoryEntry): void {
@@ -661,7 +659,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     const sortItems = (items: Item[]): Item[] =>
       [...items].sort((a, b) => Number(a.checked) - Number(b.checked) || a.order - b.order);
 
-    const cats = [...state.categories].sort((a, b) => a.order - b.order);
+    const cats = [...state.categories].sort((a, b) => alnumCompare(a.name, b.name));
     type Group = { id: string | null; name: string; items: Item[]; showHeader: boolean };
     let groups: Group[] = cats.map((c) => ({ id: c.id, name: c.name, items: sortItems(byCategory(c.id)), showHeader: true }));
     const uncategorized = sortItems(byCategory(null));
@@ -680,14 +678,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     if (groups.length === 0 && query) {
       container.innerHTML = `<div class="empty-state">Aucun article ne correspond à « ${escapeHtml(searchQuery.trim())} ».</div>`;
       disposeItemDnd?.();
-      disposeCategoryDnd?.();
       return;
     }
 
     if (groups.every((g) => g.items.length === 0)) {
       container.innerHTML = `<div class="empty-state">Ta liste est vide. Ajoute un premier article ci-dessus 👆</div>`;
       disposeItemDnd?.();
-      disposeCategoryDnd?.();
       return;
     }
 
@@ -698,7 +694,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         ${
           g.showHeader
             ? `<header class="category-header">
-                ${g.id ? `<button class="drag-handle category-drag-handle" aria-label="Réordonner la catégorie">${icons.gripVertical}</button>` : `<span class="drag-handle-spacer"></span>`}
                 ${g.id ? `<span class="category-dot" aria-hidden="true"></span>` : ""}
                 <span class="category-name" data-id="${g.id ?? ""}">${escapeHtml(g.name)}</span>
                 <span class="category-count">${g.items.filter((i) => !i.checked).length}</span>
@@ -770,7 +765,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     });
 
     disposeItemDnd?.();
-    disposeCategoryDnd?.();
 
     disposeItemDnd = enableDragReorder(container, {
       containerSelector: ".item-list",
@@ -788,18 +782,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         conn.send({ type: "reorderItems", orderedIds });
       },
     });
-
-    disposeCategoryDnd = enableDragReorder(container, {
-      containerSelector: "#categories",
-      itemSelector: ".category-section",
-      handleSelector: ".category-drag-handle",
-      onDrop: () => {
-        const orderedIds = Array.from(container.querySelectorAll<HTMLElement>(".category-section"))
-          .map((el) => el.dataset.categoryId!)
-          .filter((id) => id);
-        conn.send({ type: "reorderCategories", orderedIds });
-      },
-    });
   }
 
   function itemRowHtml(item: Item): string {
@@ -815,7 +797,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function categoryOptionsHtml(categories: Category[], selectedId: string | null = null): string {
-    const sorted = [...categories].sort((a, b) => a.order - b.order);
+    const sorted = [...categories].sort((a, b) => alnumCompare(a.name, b.name));
     const defaults = sorted.filter((c) => c.isDefault);
     const custom = sorted.filter((c) => !c.isDefault);
     const optionHtml = (c: Category) => `<option value="${c.id}" ${c.id === selectedId ? "selected" : ""}>${escapeHtml(c.name)}</option>`;
@@ -908,7 +890,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   return () => {
     conn.disconnect();
     disposeItemDnd?.();
-    disposeCategoryDnd?.();
     clearUndoStack();
     document.querySelectorAll(".modal-overlay").forEach((el) => el.remove());
   };

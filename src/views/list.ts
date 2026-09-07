@@ -998,15 +998,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           </div>
           <ul id="suggestions" class="suggestions" hidden></ul>
         </form>
-        <p class="add-form-hint">Non protégé : évite les informations personnelles ou sensibles.</p>
+        <p class="add-form-hint">Comme un post-it : pas confidentiel, évite les données personnelles.</p>
 
         <div id="quick-add" class="quick-add"></div>
 
         <div id="categories" class="categories"></div>
 
         <p class="list-privacy-note">
-          Les données ne sont pas protégées : toute personne qui a le code peut voir et
-          modifier la liste. N'y mets pas d'informations personnelles ou sensibles.
+          Comme un post-it partagé : pratique, mais pas confidentiel. Toute personne
+          avec le code peut voir et modifier la liste — évite les données personnelles.
         </p>
       </div>
     `;

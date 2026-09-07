@@ -440,6 +440,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
             <input id="new-category-name" type="text" placeholder="Nouvelle catégorie" maxlength="40" />
             <button type="submit" class="btn primary">Ajouter</button>
           </form>
+          <p class="add-form-hint">Les données ne sont ni chiffrées ni protégées : n'y mets rien de privé ou de sensible.</p>
         </div>
       `;
       overlay.querySelector(".modal-close")?.addEventListener("click", close);
@@ -626,6 +627,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
               : ""
           }
           <div id="suggestion-list"></div>
+          <p class="add-form-hint">Les données ne sont ni chiffrées ni protégées : n'y mets rien de privé ou de sensible.</p>
         </div>
       `;
       overlay.querySelector(".modal-close")?.addEventListener("click", close);
@@ -998,15 +1000,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           </div>
           <ul id="suggestions" class="suggestions" hidden></ul>
         </form>
-        <p class="add-form-hint">Toute personne avec le code peut voir et modifier la liste — évite les données personnelles.</p>
+        <p class="add-form-hint">Les données ne sont ni chiffrées ni protégées : n'y mets rien de privé ou de sensible.</p>
 
         <div id="quick-add" class="quick-add"></div>
 
         <div id="categories" class="categories"></div>
 
         <p class="list-privacy-note">
-          Toute personne avec le code peut voir et modifier la liste — évite les
-          données personnelles.
+          Les données ne sont ni chiffrées ni protégées : n'y mets rien de privé ou
+          de sensible.
         </p>
       </div>
     `;

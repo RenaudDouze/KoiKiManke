@@ -37,8 +37,8 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
           <h1>KoiKiManke</h1>
           <p class="tagline">Une liste de courses partagée, synchronisée en direct.</p>
           <p class="tagline privacy-note">
-            Comme un post-it partagé : pratique, mais pas confidentiel. Toute personne
-            avec le code peut voir et modifier la liste — évite les données personnelles.
+            Toute personne avec le code peut voir et modifier la liste — évite les
+            données personnelles.
           </p>
         </header>
 
@@ -68,7 +68,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
             <input id="create-name" type="text" placeholder="Nom de la liste (optionnel)" maxlength="60" />
             <button type="submit" class="btn primary">Créer</button>
           </form>
-          <p class="add-form-hint">Comme un post-it : pas confidentiel, évite les données personnelles.</p>
+          <p class="add-form-hint">Toute personne avec le code peut voir et modifier la liste — évite les données personnelles.</p>
         </section>
 
         <section class="card">

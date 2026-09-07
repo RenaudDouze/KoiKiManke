@@ -998,15 +998,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           </div>
           <ul id="suggestions" class="suggestions" hidden></ul>
         </form>
-        <p class="add-form-hint">Comme un post-it : pas confidentiel, évite les données personnelles.</p>
+        <p class="add-form-hint">Toute personne avec le code peut voir et modifier la liste — évite les données personnelles.</p>
 
         <div id="quick-add" class="quick-add"></div>
 
         <div id="categories" class="categories"></div>
 
         <p class="list-privacy-note">
-          Comme un post-it partagé : pratique, mais pas confidentiel. Toute personne
-          avec le code peut voir et modifier la liste — évite les données personnelles.
+          Toute personne avec le code peut voir et modifier la liste — évite les
+          données personnelles.
         </p>
       </div>
     `;

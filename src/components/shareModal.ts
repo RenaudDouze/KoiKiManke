@@ -30,6 +30,7 @@ export function openShareModal(code: string, listName: string, actions: ShareMod
         <button class="btn" id="share-import"><span class="menu-item-icon">${icons.upload}</span>Importer…</button>
       </div>
       <input type="file" id="share-import-file" accept="application/json" hidden />
+      <p class="add-form-hint">Les données ne sont ni chiffrées ni protégées : n'y mets rien de privé ou de sensible.</p>
     </div>
   `;
   document.body.appendChild(overlay);

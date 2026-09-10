@@ -977,7 +977,10 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function categoryOptionsHtml(categories: Category[], selectedId: string | null = null): string {
-    const sorted = [...categories].sort((a, b) => a.order - b.order);
+    // Alphabétique plutôt que l'ordre manuel des catégories (voir
+    // renderCategories) : plus facile à parcourir dans une liste déroulante
+    // qu'à retenir un ordre personnalisé.
+    const sorted = [...categories].sort((a, b) => alnumCompare(a.name, b.name));
     const optionHtml = (c: Category) => `<option value="${c.id}" ${c.id === selectedId ? "selected" : ""}>${escapeHtml(c.name)}</option>`;
     return [`<option value="" ${selectedId === null ? "selected" : ""}>Sans catégorie</option>`, sorted.map(optionHtml).join("")].join("");
   }

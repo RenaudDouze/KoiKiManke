@@ -391,6 +391,45 @@ test("le tri alphabétique des articles est optionnel et persiste après un rech
   await expect(page.locator('[data-action="item-sort"]')).toHaveText("Tri des articles : Alphabétique");
 });
 
+test("masquer les articles cochés est optionnel et persiste après un rechargement", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  for (const name of ["Pommes", "Poires"]) {
+    await page.fill("#add-input", name);
+    await page.click(".add-submit");
+  }
+  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Poires" }) }).locator(".item-check").check();
+  await expect(page.locator(".item-name")).toHaveText(["Pommes", "Poires"]);
+
+  await page.click("#btn-menu");
+  const hideBtn = page.locator('[data-action="hide-checked"]');
+  await expect(hideBtn).toHaveText("Articles cochés : Affichés");
+  await hideBtn.click();
+  await expect(hideBtn).toHaveText("Articles cochés : Masqués");
+  await page.keyboard.press("Escape");
+
+  await expect(page.locator(".item-name")).toHaveText(["Pommes"]);
+
+  // La préférence (personnelle, par appareil) survit à un rechargement.
+  await page.reload();
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+  await expect(page.locator(".item-name")).toHaveText(["Pommes"]);
+
+  // Cocher le dernier article visible le fait disparaître aussitôt, avec un
+  // message dédié plutôt que le message générique de liste vide.
+  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Pommes" }) }).locator(".item-check").check();
+  await expect(page.locator(".empty-state")).toHaveText("Tous les articles sont cochés (et masqués).");
+
+  await page.click("#btn-menu");
+  await expect(page.locator('[data-action="hide-checked"]')).toHaveText("Articles cochés : Masqués");
+  await page.locator('[data-action="hide-checked"]').click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".item-name")).toHaveText(["Pommes", "Poires"]);
+});
+
 test("glisser un article vers la gauche le supprime (mobile), avec annulation possible", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");

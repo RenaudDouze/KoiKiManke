@@ -544,14 +544,16 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     const suggestionRowHtml = (h: HistoryEntry): string => `
       <li data-key="${escapeHtml(h.key)}">
-        <button type="button" class="icon-btn suggestion-favorite" data-action="fav" data-key="${escapeHtml(h.key)}" aria-label="${h.favorite ? "Retirer des favoris" : "Ajouter aux favoris"}" aria-pressed="${h.favorite ? "true" : "false"}">
-          ${h.favorite ? icons.starFilled : icons.star}
-        </button>
-        <span class="suggestion-name" data-key="${escapeHtml(h.key)}">${escapeHtml(h.label)}</span>
-        <select class="suggestion-category" data-key="${escapeHtml(h.key)}" aria-label="Catégorie de « ${escapeHtml(h.label)} »">
-          ${categoryOptionsHtml(state!.categories, h.categoryId)}
-        </select>
-        <button class="icon-btn" data-action="del" data-key="${escapeHtml(h.key)}" aria-label="Supprimer la suggestion « ${escapeHtml(h.label)} »">${icons.trash}</button>
+        <div class="suggestion-row">
+          <button type="button" class="icon-btn suggestion-favorite" data-action="fav" data-key="${escapeHtml(h.key)}" aria-label="${h.favorite ? "Retirer des favoris" : "Ajouter aux favoris"}" aria-pressed="${h.favorite ? "true" : "false"}">
+            ${h.favorite ? icons.starFilled : icons.star}
+          </button>
+          <span class="suggestion-name" data-key="${escapeHtml(h.key)}">${escapeHtml(h.label)}</span>
+          <select class="suggestion-category" data-key="${escapeHtml(h.key)}" aria-label="Catégorie de « ${escapeHtml(h.label)} »">
+            ${categoryOptionsHtml(state!.categories, h.categoryId)}
+          </select>
+          <button class="icon-btn" data-action="del" data-key="${escapeHtml(h.key)}" aria-label="Supprimer la suggestion « ${escapeHtml(h.label)} »">${icons.trash}</button>
+        </div>
       </li>`;
 
     const wireRows = (container: Element): void => {

@@ -293,6 +293,41 @@ test("une catégorie sans article dans la liste reste gérable mais ne s'affiche
   await expect(page.locator(".cat-name", { hasText: "Papeterie" })).toHaveCount(1);
 });
 
+test("une catégorie entièrement cochée passe après les catégories non complétées", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.fill("#new-category-name", "Bricolage");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li", { hasText: "Bricolage" })).toHaveCount(1);
+  await page.fill("#new-category-name", "Papeterie");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li", { hasText: "Papeterie" })).toHaveCount(1);
+  await page.keyboard.press("Escape");
+
+  await page.selectOption("#add-category", { label: "Bricolage" });
+  await page.fill("#add-input", "Marteau");
+  await page.click(".add-submit");
+  await page.selectOption("#add-category", { label: "Papeterie" });
+  await page.fill("#add-input", "Stylo");
+  await page.click(".add-submit");
+
+  await expect(page.locator(".category-name")).toHaveText(["Bricolage", "Papeterie"]);
+
+  // Cocher le seul article de "Bricolage" la fait passer après "Papeterie",
+  // encore incomplète.
+  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Marteau" }) }).locator(".item-check").check();
+  await expect(page.locator(".category-name")).toHaveText(["Papeterie", "Bricolage"]);
+
+  // La décocher restaure l'ordre d'origine.
+  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Marteau" }) }).locator(".item-check").uncheck();
+  await expect(page.locator(".category-name")).toHaveText(["Bricolage", "Papeterie"]);
+});
+
 test("on peut choisir manuellement la couleur d'une catégorie, puis revenir à l'automatique", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");

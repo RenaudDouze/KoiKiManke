@@ -328,6 +328,64 @@ test("l'ordre manuel des catégories s'affiche dans la liste mais pas dans le me
   await expect(page.locator(".category-name")).toHaveText(["Zoo", "Abricot"]);
 });
 
+test("on peut réordonner les catégories par glisser-déposer dans le gestionnaire de catégories", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.fill("#new-category-name", "Zoo");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li", { hasText: "Zoo" })).toHaveCount(1);
+  await page.fill("#new-category-name", "Abricot");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li", { hasText: "Abricot" })).toHaveCount(1);
+
+  // Ordre initial : ordre de création (Zoo avant Abricot).
+  await expect(page.locator(".manage-category-list .cat-name")).toHaveText(["Zoo", "Abricot"]);
+
+  const zooRow = page.locator(".manage-category-list li", { hasText: "Zoo" });
+  const abricotHandle = page.locator(".manage-category-list li", { hasText: "Abricot" }).locator(".category-manage-drag-handle");
+  const zooBox = await zooRow.boundingBox();
+  const handleBox = await abricotHandle.boundingBox();
+  if (!zooBox || !handleBox) throw new Error("lignes introuvables");
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+  const targetX = zooBox.x + zooBox.width / 2;
+  const targetY = zooBox.y + 4; // moitié haute de la ligne "Zoo" : insertion avant elle
+
+  await abricotHandle.dispatchEvent("pointerdown", { pointerType: "mouse", pointerId: 1, clientX: startX, clientY: startY, bubbles: true });
+  await abricotHandle.dispatchEvent("pointermove", {
+    pointerType: "mouse",
+    pointerId: 1,
+    clientX: targetX,
+    clientY: targetY,
+    bubbles: true,
+    cancelable: true,
+  });
+  await abricotHandle.dispatchEvent("pointerup", { pointerType: "mouse", pointerId: 1, clientX: targetX, clientY: targetY, bubbles: true });
+
+  // Glisser "Abricot" au-dessus de "Zoo" inverse l'ordre manuel, et c'est
+  // envoyé au serveur (reorderCategories), pas juste un effet visuel local.
+  await expect(page.locator(".manage-category-list .cat-name")).toHaveText(["Abricot", "Zoo"]);
+  await page.keyboard.press("Escape");
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await expect(page.locator(".manage-category-list .cat-name")).toHaveText(["Abricot", "Zoo"]);
+  await page.keyboard.press("Escape");
+
+  // ... et se répercute sur l'ordre affiché dans la liste de courses.
+  await page.selectOption("#add-category", { label: "Zoo" });
+  await page.fill("#add-input", "Lion");
+  await page.click(".add-submit");
+  await page.selectOption("#add-category", { label: "Abricot" });
+  await page.fill("#add-input", "Compote");
+  await page.click(".add-submit");
+  await expect(page.locator(".category-name")).toHaveText(["Abricot", "Zoo"]);
+});
+
 test("une catégorie entièrement cochée passe après les catégories non complétées", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");

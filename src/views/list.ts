@@ -798,6 +798,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // qu'elle est vide.
     groups = groups.filter((g) => g.items.length > 0);
 
+    // Une catégorie entièrement cochée passe après celles encore en cours,
+    // même logique que pour les articles au sein d'une catégorie (voir
+    // sortItems ci-dessus). Tri stable : ne touche pas à l'ordre relatif au
+    // sein de chaque groupe (complet / non complet).
+    groups.sort((a, b) => Number(a.items.every((i) => i.checked)) - Number(b.items.every((i) => i.checked)));
+
     if (groups.length === 0 && query) {
       container.innerHTML = `<div class="empty-state">Aucun article ne correspond à « ${escapeHtml(searchQuery.trim())} ».</div>`;
       disposeItemDnd?.();

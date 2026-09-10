@@ -421,6 +421,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     let openPaletteFor: string | null = null;
+    let disposeDnd: (() => void) | null = null;
     const render = () => {
       overlay.innerHTML = `
         <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
@@ -433,6 +434,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
                 (c) => `
               <li data-id="${c.id}">
                 <div class="cat-row" style="--cat-hue: ${resolveCategoryHue(c)}">
+                  <button class="drag-handle category-manage-drag-handle" aria-label="Réordonner « ${escapeHtml(c.name)} »">${icons.gripVertical}</button>
                   <button type="button" class="category-dot color-swatch-toggle" data-id="${c.id}" aria-label="Changer la couleur de « ${escapeHtml(c.name)} »" aria-expanded="${openPaletteFor === c.id}"></button>
                   <span class="cat-name" data-id="${c.id}">${escapeHtml(c.name)}</span>
                   <button class="icon-btn" data-action="del" data-id="${c.id}" aria-label="Supprimer">${icons.trash}</button>
@@ -498,8 +500,22 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         conn.send({ type: "addCategory", id: uid(), name });
         input.value = "";
       });
+
+      disposeDnd?.();
+      disposeDnd = enableDragReorder(overlay, {
+        containerSelector: ".manage-category-list",
+        itemSelector: "li",
+        handleSelector: ".category-manage-drag-handle",
+        onDrop: () => {
+          const orderedIds = Array.from(overlay.querySelectorAll<HTMLElement>(".manage-category-list li"))
+            .map((li) => li.dataset.id!)
+            .filter((id) => id);
+          conn.send({ type: "reorderCategories", orderedIds });
+        },
+      });
     };
     const close = () => {
+      disposeDnd?.();
       overlay.remove();
       unsubscribe();
       releaseFocusTrap();

@@ -40,8 +40,9 @@ test("parcours complet : créer, ajouter avec quantité, catégoriser, cocher, p
   await expect(page.locator(".item.checked .item-name", { hasText: "Lait" })).toBeVisible();
 
   // Partage : code affiché + QR code généré, export/import accessibles
-  // depuis la même modale.
-  await page.click("#btn-share");
+  // depuis la même modale (menu ⋮ → Partager).
+  await page.click("#btn-menu");
+  await page.click('[data-action="share"]');
   await expect(page.locator(".share-modal .share-code")).not.toBeEmpty();
   await expect(page.locator(".share-modal .qr-wrap svg")).toBeVisible();
 
@@ -54,7 +55,8 @@ test("parcours complet : créer, ajouter avec quantité, catégoriser, cocher, p
   await page.click("#create-form button[type=submit]");
   await page.waitForURL(/\/l\//);
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
-  await page.click("#btn-share");
+  await page.click("#btn-menu");
+  await page.click('[data-action="share"]');
   await page.click("#share-import");
   await page.setInputFiles("#share-import-file", exportPath!);
   await page.click("#import-merge");

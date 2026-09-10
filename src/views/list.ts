@@ -17,6 +17,7 @@ import { resolveCategoryHue } from "../lib/color";
 import { alnumCompare } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 import { cycleItemSortPreference, getItemSortPreference, itemSortLabel } from "../lib/itemSortPreference";
+import { getHideCheckedPreference, toggleHideCheckedPreference } from "../lib/hideCheckedPreference";
 import { getDeviceName } from "../lib/presence";
 import { historyKey } from "../../shared/historyKey";
 
@@ -335,6 +336,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     panel?.querySelector('[data-action="item-sort"]')?.addEventListener("click", (e) => {
       cycleItemSortPreference();
       updateItemSortMenuItem(e.currentTarget as HTMLElement);
+      renderCategories();
+    });
+    panel?.querySelector('[data-action="hide-checked"]')?.addEventListener("click", (e) => {
+      toggleHideCheckedPreference();
+      updateHideCheckedMenuItem(e.currentTarget as HTMLElement);
       renderCategories();
     });
     panel?.querySelector('[data-action="manage-categories"]')?.addEventListener("click", openCategoryManager);
@@ -760,8 +766,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     const query = searchQuery.trim().toLowerCase();
     const alphabeticalItems = getItemSortPreference() === "alphabetical";
+    const hideChecked = getHideCheckedPreference();
     const byCategory = (categoryId: string | null): Item[] =>
-      state!.items.filter((i) => i.categoryId === categoryId && (!query || i.name.toLowerCase().includes(query)));
+      state!.items.filter(
+        (i) => i.categoryId === categoryId && (!query || i.name.toLowerCase().includes(query)) && (!hideChecked || !i.checked),
+      );
     const sortItems = (items: Item[]): Item[] =>
       [...items].sort(
         (a, b) => Number(a.checked) - Number(b.checked) || (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
@@ -791,6 +800,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     if (groups.length === 0 && query) {
       container.innerHTML = `<div class="empty-state">Aucun article ne correspond à « ${escapeHtml(searchQuery.trim())} ».</div>`;
+      disposeItemDnd?.();
+      disposeCategoryDnd?.();
+      disposeSwipe?.();
+      return;
+    }
+
+    if (groups.length === 0 && hideChecked && state.items.length > 0) {
+      container.innerHTML = `<div class="empty-state">Tous les articles sont cochés (et masqués).</div>`;
       disposeItemDnd?.();
       disposeCategoryDnd?.();
       disposeSwipe?.();
@@ -976,6 +993,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <div class="menu-panel" id="menu-panel" hidden>
             <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
             <button type="button" data-action="item-sort">${itemSortMenuHtml(getItemSortPreference())}</button>
+            <button type="button" data-action="hide-checked">${hideCheckedMenuHtml(getHideCheckedPreference())}</button>
             <button type="button" data-action="manage-categories"><span class="menu-item-icon">${icons.tag}</span>Gérer les catégories</button>
             <button type="button" data-action="manage-suggestions"><span class="menu-item-icon">${icons.history}</span>Gérer les suggestions</button>
             <button type="button" data-action="clear-checked"><span class="menu-item-icon">${icons.checkCircle}</span><span class="menu-item-label">Vider les articles cochés</span></button>
@@ -1028,6 +1046,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
   function updateItemSortMenuItem(button: HTMLElement): void {
     button.innerHTML = itemSortMenuHtml(getItemSortPreference());
+  }
+
+  function hideCheckedMenuHtml(hide: boolean): string {
+    return `<span class="menu-item-icon">${hide ? icons.eyeOff : icons.eye}</span>Articles cochés : ${hide ? "Masqués" : "Affichés"}`;
+  }
+
+  function updateHideCheckedMenuItem(button: HTMLElement): void {
+    button.innerHTML = hideCheckedMenuHtml(getHideCheckedPreference());
   }
 
   function notFoundHtml(c: string): string {

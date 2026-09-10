@@ -814,7 +814,8 @@ button:focus-visible {
   padding: 0.4em 0.6em;
 }
 
-.cat-row {
+.cat-row,
+.suggestion-row {
   display: flex;
   align-items: center;
   gap: 0.4rem;

@@ -263,14 +263,10 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
   function wireHeader(): void {
     root.querySelector("#btn-home")?.addEventListener("click", () => navigate("/"));
-    root.querySelector("#btn-share")?.addEventListener("click", () => {
-      if (!state) return;
-      openShareModal(state.code, state.name, {
-        onExport: () => {
-          if (state) exportListState(state);
-        },
-        onImportFile: handleImportFile,
-      });
+    root.querySelector("#btn-hide-checked")?.addEventListener("click", (e) => {
+      toggleHideCheckedPreference();
+      updateHideCheckedButton(e.currentTarget as HTMLElement);
+      renderCategories();
     });
 
     const presenceBtn = root.querySelector("#btn-presence");
@@ -329,6 +325,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       if (panel) panel.hidden = true;
     });
 
+    panel?.querySelector('[data-action="share"]')?.addEventListener("click", () => {
+      if (!state) return;
+      openShareModal(state.code, state.name, {
+        onExport: () => {
+          if (state) exportListState(state);
+        },
+        onImportFile: handleImportFile,
+      });
+    });
     panel?.querySelector('[data-action="theme"]')?.addEventListener("click", (e) => {
       cycleThemePreference();
       updateThemeMenuItem(e.currentTarget as HTMLElement);
@@ -336,11 +341,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     panel?.querySelector('[data-action="item-sort"]')?.addEventListener("click", (e) => {
       cycleItemSortPreference();
       updateItemSortMenuItem(e.currentTarget as HTMLElement);
-      renderCategories();
-    });
-    panel?.querySelector('[data-action="hide-checked"]')?.addEventListener("click", (e) => {
-      toggleHideCheckedPreference();
-      updateHideCheckedMenuItem(e.currentTarget as HTMLElement);
       renderCategories();
     });
     panel?.querySelector('[data-action="manage-categories"]')?.addEventListener("click", openCategoryManager);
@@ -988,12 +988,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           </button>
           <div class="menu-panel presence-panel" id="presence-panel" hidden></div>
           <button class="icon-btn" id="btn-search" aria-label="Rechercher">${icons.search}</button>
-          <button class="icon-btn" id="btn-share" aria-label="Partager">${icons.share}</button>
+          ${hideCheckedButtonHtml(getHideCheckedPreference())}
           <button class="icon-btn" id="btn-menu" aria-label="Menu">${icons.more}</button>
           <div class="menu-panel" id="menu-panel" hidden>
+            <button type="button" data-action="share"><span class="menu-item-icon">${icons.share}</span>Partager</button>
             <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
             <button type="button" data-action="item-sort">${itemSortMenuHtml(getItemSortPreference())}</button>
-            <button type="button" data-action="hide-checked">${hideCheckedMenuHtml(getHideCheckedPreference())}</button>
             <button type="button" data-action="manage-categories"><span class="menu-item-icon">${icons.tag}</span>Gérer les catégories</button>
             <button type="button" data-action="manage-suggestions"><span class="menu-item-icon">${icons.history}</span>Gérer les suggestions</button>
             <button type="button" data-action="clear-checked"><span class="menu-item-icon">${icons.checkCircle}</span><span class="menu-item-label">Vider les articles cochés</span></button>
@@ -1048,12 +1048,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     button.innerHTML = itemSortMenuHtml(getItemSortPreference());
   }
 
-  function hideCheckedMenuHtml(hide: boolean): string {
-    return `<span class="menu-item-icon">${hide ? icons.eyeOff : icons.eye}</span>Articles cochés : ${hide ? "Masqués" : "Affichés"}`;
+  function hideCheckedButtonHtml(hide: boolean): string {
+    return `<button class="icon-btn" id="btn-hide-checked" aria-label="${hide ? "Afficher les articles cochés" : "Masquer les articles cochés"}" aria-pressed="${hide}">${hide ? icons.eyeOff : icons.eye}</button>`;
   }
 
-  function updateHideCheckedMenuItem(button: HTMLElement): void {
-    button.innerHTML = hideCheckedMenuHtml(getHideCheckedPreference());
+  function updateHideCheckedButton(button: HTMLElement): void {
+    const hide = getHideCheckedPreference();
+    button.setAttribute("aria-label", hide ? "Afficher les articles cochés" : "Masquer les articles cochés");
+    button.setAttribute("aria-pressed", String(hide));
+    button.innerHTML = hide ? icons.eyeOff : icons.eye;
   }
 
   function notFoundHtml(c: string): string {

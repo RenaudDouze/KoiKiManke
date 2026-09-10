@@ -404,12 +404,10 @@ test("masquer les articles cochés est optionnel et persiste après un rechargem
   await page.locator(".item", { has: page.locator(".item-name", { hasText: "Poires" }) }).locator(".item-check").check();
   await expect(page.locator(".item-name")).toHaveText(["Pommes", "Poires"]);
 
-  await page.click("#btn-menu");
-  const hideBtn = page.locator('[data-action="hide-checked"]');
-  await expect(hideBtn).toHaveText("Articles cochés : Affichés");
+  const hideBtn = page.locator("#btn-hide-checked");
+  await expect(hideBtn).toHaveAttribute("aria-pressed", "false");
   await hideBtn.click();
-  await expect(hideBtn).toHaveText("Articles cochés : Masqués");
-  await page.keyboard.press("Escape");
+  await expect(hideBtn).toHaveAttribute("aria-pressed", "true");
 
   await expect(page.locator(".item-name")).toHaveText(["Pommes"]);
 
@@ -417,16 +415,15 @@ test("masquer les articles cochés est optionnel et persiste après un rechargem
   await page.reload();
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
   await expect(page.locator(".item-name")).toHaveText(["Pommes"]);
+  await expect(page.locator("#btn-hide-checked")).toHaveAttribute("aria-pressed", "true");
 
   // Cocher le dernier article visible le fait disparaître aussitôt, avec un
   // message dédié plutôt que le message générique de liste vide.
   await page.locator(".item", { has: page.locator(".item-name", { hasText: "Pommes" }) }).locator(".item-check").check();
   await expect(page.locator(".empty-state")).toHaveText("Tous les articles sont cochés (et masqués).");
 
-  await page.click("#btn-menu");
-  await expect(page.locator('[data-action="hide-checked"]')).toHaveText("Articles cochés : Masqués");
-  await page.locator('[data-action="hide-checked"]').click();
-  await page.keyboard.press("Escape");
+  await page.locator("#btn-hide-checked").click();
+  await expect(page.locator("#btn-hide-checked")).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator(".item-name")).toHaveText(["Pommes", "Poires"]);
 });
 

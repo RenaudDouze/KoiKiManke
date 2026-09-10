@@ -293,6 +293,41 @@ test("une catégorie sans article dans la liste reste gérable mais ne s'affiche
   await expect(page.locator(".cat-name", { hasText: "Papeterie" })).toHaveCount(1);
 });
 
+test("l'ordre manuel des catégories s'affiche dans la liste mais pas dans le menu déroulant", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  // Créées dans un ordre volontairement non alphabétique : "Zoo" avant
+  // "Abricot" fixe l'ordre manuel des catégories (par défaut, l'ordre de
+  // création).
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.fill("#new-category-name", "Zoo");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li", { hasText: "Zoo" })).toHaveCount(1);
+  await page.fill("#new-category-name", "Abricot");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li", { hasText: "Abricot" })).toHaveCount(1);
+  await page.keyboard.press("Escape");
+
+  // Le menu déroulant (ajout d'article) reste alphabétique, quel que soit
+  // l'ordre manuel des catégories.
+  await expect(page.locator("#add-category option")).toHaveText(["Sans catégorie", "Abricot", "Zoo"]);
+
+  await page.selectOption("#add-category", { label: "Zoo" });
+  await page.fill("#add-input", "Lion");
+  await page.click(".add-submit");
+  await page.selectOption("#add-category", { label: "Abricot" });
+  await page.fill("#add-input", "Compote");
+  await page.click(".add-submit");
+
+  // La liste principale, elle, respecte l'ordre manuel : "Zoo" avant
+  // "Abricot", pas l'ordre alphabétique.
+  await expect(page.locator(".category-name")).toHaveText(["Zoo", "Abricot"]);
+});
+
 test("une catégorie entièrement cochée passe après les catégories non complétées", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");

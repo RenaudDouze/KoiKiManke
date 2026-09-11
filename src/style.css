@@ -667,18 +667,19 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-/* Simple pastille de couleur (gris/bleu/rouge selon la priorité), sans
-   liseré ni fond sur la ligne — repérable au premier coup d'œil sans
-   surcharger visuellement la liste. La zone cliquable dépasse largement
-   la pastille visible (::before), pour rester facile à toucher. */
+/* Petite barre verticale de couleur (gris/bleu/rouge selon la priorité) :
+   volontairement pas une pastille ronde, pour ne pas se confondre avec
+   .category-dot (le rond de couleur des catégories, dans l'en-tête). La
+   zone cliquable dépasse largement le trait visible (::before), pour
+   rester facile à toucher malgré sa finesse. */
 .item-priority {
   position: relative;
   flex-shrink: 0;
-  width: 10px;
-  height: 10px;
+  width: 4px;
+  height: 16px;
   padding: 0;
   border: none;
-  border-radius: 50%;
+  border-radius: 2px;
   cursor: pointer;
   background: var(--priority-low);
 }
@@ -686,7 +687,7 @@ button:focus-visible {
 .item-priority::before {
   content: "";
   position: absolute;
-  inset: -10px;
+  inset: -8px -10px;
 }
 
 .item-priority[data-priority="0"] {

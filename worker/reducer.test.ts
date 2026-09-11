@@ -140,6 +140,7 @@ describe("applyMessage", () => {
           categoryId: "cat-1",
           checked: false,
           order: 0,
+          priority: 1,
           createdAt: NOW,
           updatedAt: NOW,
         },
@@ -193,6 +194,19 @@ describe("applyMessage", () => {
       applyMessage(state, { type: "updateItem", id: "i1", quantity: "", categoryId: null }, NOW);
       expect(state.items[0].quantity).toBe("");
       expect(state.items[0].categoryId).toBeNull();
+    });
+
+    it("met à jour la priorité quand elle est fournie", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", priority: 2 }, NOW);
+      expect(state.items[0].priority).toBe(2);
+    });
+
+    it("ne touche pas la priorité quand elle n'est pas fournie", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", priority: 2 }, NOW);
+      applyMessage(state, { type: "updateItem", id: "i1", quantity: "3" }, NOW);
+      expect(state.items[0].priority).toBe(2);
     });
 
     it("ignore un id inconnu", () => {

@@ -661,6 +661,19 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.item-priority {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.item-priority[data-priority="0"] {
+  opacity: 0.4;
+}
+
+.item-priority[data-priority="2"] {
+  color: var(--danger);
+}
+
 .item-delete {
   flex-shrink: 0;
   color: var(--text-muted);

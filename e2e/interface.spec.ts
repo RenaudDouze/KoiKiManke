@@ -421,6 +421,86 @@ test("une catégorie entièrement cochée passe après les catégories non compl
   await expect(page.locator(".category-name")).toHaveText(["Bricolage", "Papeterie"]);
 });
 
+test("la priorité d'un article se cycle par clic et réordonne les articles au sein d'une catégorie", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  for (const name of ["Pommes", "Poires", "Lait"]) {
+    await page.fill("#add-input", name);
+    await page.click(".add-submit");
+  }
+
+  // Par défaut, tous les articles sont en priorité Normale : l'ordre de
+  // création (manuel) est inchangé.
+  await expect(page.locator(".item-name")).toHaveText(["Pommes", "Poires", "Lait"]);
+  const laitPriority = page.locator(".item", { has: page.locator(".item-name", { hasText: "Lait" }) }).locator(".item-priority");
+  await expect(laitPriority).toHaveAttribute("data-priority", "1");
+  await expect(laitPriority).toHaveAttribute("aria-label", /Normale/);
+
+  // Un clic fait passer Normale -> Haute : "Lait" remonte en tête.
+  await laitPriority.click();
+  await expect(laitPriority).toHaveAttribute("data-priority", "2");
+  await expect(laitPriority).toHaveAttribute("aria-label", /Haute/);
+  await expect(page.locator(".item-name")).toHaveText(["Lait", "Pommes", "Poires"]);
+
+  // Deux clics font passer Normale -> Haute -> Basse : "Pommes" passe en
+  // dernier, derrière "Poires" restée en Normale. Chaque clic attend la
+  // confirmation serveur (le libellé) avant le suivant : sinon, le second
+  // clic partirait de l'état encore local du premier (aller-retour WebSocket
+  // asynchrone), et les deux enverraient "Haute" au lieu d'avancer le cycle.
+  const pommesPriority = page.locator(".item", { has: page.locator(".item-name", { hasText: "Pommes" }) }).locator(".item-priority");
+  await pommesPriority.click();
+  await expect(pommesPriority).toHaveAttribute("data-priority", "2");
+  await pommesPriority.click();
+  await expect(pommesPriority).toHaveAttribute("data-priority", "0");
+  await expect(pommesPriority).toHaveAttribute("aria-label", /Basse/);
+  await expect(page.locator(".item-name")).toHaveText(["Lait", "Poires", "Pommes"]);
+
+  // Persiste après rechargement (aller-retour serveur, pas juste local).
+  await page.reload();
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+  await expect(page.locator(".item-name")).toHaveText(["Lait", "Poires", "Pommes"]);
+});
+
+test("une catégorie contenant un article non coché de priorité plus élevée passe avant les autres", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.fill("#new-category-name", "Bricolage");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li", { hasText: "Bricolage" })).toHaveCount(1);
+  await page.fill("#new-category-name", "Papeterie");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li", { hasText: "Papeterie" })).toHaveCount(1);
+  await page.keyboard.press("Escape");
+
+  await page.selectOption("#add-category", { label: "Bricolage" });
+  await page.fill("#add-input", "Marteau");
+  await page.click(".add-submit");
+  await page.selectOption("#add-category", { label: "Papeterie" });
+  await page.fill("#add-input", "Stylo");
+  await page.click(".add-submit");
+
+  await expect(page.locator(".category-name")).toHaveText(["Bricolage", "Papeterie"]);
+
+  // "Stylo" (Papeterie) passe en Haute : sa catégorie remonte devant
+  // "Bricolage", qui n'a que des articles en priorité Normale.
+  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Stylo" }) }).locator(".item-priority").click();
+  await expect(page.locator(".category-name")).toHaveText(["Papeterie", "Bricolage"]);
+
+  // Cocher "Stylo" le retire du calcul (seuls les articles non cochés
+  // comptent) : "Papeterie" est maintenant entièrement cochée, elle repasse
+  // derrière "Bricolage" (la règle catégorie-complète-en-dernier prime).
+  await page.locator(".item", { has: page.locator(".item-name", { hasText: "Stylo" }) }).locator(".item-check").check();
+  await expect(page.locator(".category-name")).toHaveText(["Bricolage", "Papeterie"]);
+});
+
 test("on peut choisir manuellement la couleur d'une catégorie, puis revenir à l'automatique", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");

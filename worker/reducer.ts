@@ -65,6 +65,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
         categoryId: validCategoryId(state, msg.categoryId),
         checked: false,
         order: nextOrder(state.items),
+        priority: 1,
         createdAt: now,
         updatedAt: now,
       };
@@ -78,6 +79,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       if (msg.name !== undefined) item.name = msg.name;
       if (msg.quantity !== undefined) item.quantity = msg.quantity;
       if (msg.categoryId !== undefined) item.categoryId = validCategoryId(state, msg.categoryId);
+      if (msg.priority !== undefined) item.priority = msg.priority;
       item.updatedAt = now;
       return;
     }

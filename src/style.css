@@ -9,7 +9,8 @@
   --primary-contrast: #ffffff;
   --danger: #c4453a;
   --favorite: #d99a00;
-  --priority-low: #3d6a94;
+  --priority-normal: #3d6a94;
+  --priority-low: #5f6b78;
   --checked-bg: #eef1ee;
   --shadow: 0 1px 3px rgba(20, 30, 25, 0.08), 0 1px 2px rgba(20, 30, 25, 0.06);
   color-scheme: light;
@@ -27,7 +28,8 @@
     --primary-contrast: #06150d;
     --danger: #e2685d;
     --favorite: #f0b429;
-    --priority-low: #6fa8dc;
+    --priority-normal: #6fa8dc;
+    --priority-low: #8a97a6;
     --checked-bg: #1f2a25;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
@@ -45,7 +47,8 @@
   --primary-contrast: #06150d;
   --danger: #e2685d;
   --favorite: #f0b429;
-  --priority-low: #6fa8dc;
+  --priority-normal: #6fa8dc;
+  --priority-low: #8a97a6;
   --checked-bg: #1f2a25;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
@@ -666,28 +669,32 @@ button:focus-visible {
 
 .item-priority {
   flex-shrink: 0;
-  color: var(--text-muted);
   border-radius: 999px;
 }
 
-/* Basse reste discrète (drapeau teinté mais estompé, sans badge ni
-   liseré) pour ne pas se démarquer davantage que la priorité Normale,
-   qui elle garde son apparence pleine opacité par défaut (aucune règle
-   dédiée ci-dessous). */
-.item[data-priority="0"] .item-priority {
-  color: var(--priority-low);
-  opacity: 0.55;
+/* Les 3 niveaux partagent le même traitement (drapeau plein contrasté +
+   liseré sur toute la ligne, repérable sans avoir à lire l'article) et ne
+   se distinguent que par la couleur : gris pour Basse, bleu pour Normale,
+   rouge pour Haute. */
+.item[data-priority="0"] {
+  --priority-color: var(--priority-low);
 }
 
-/* Priorité Haute : drapeau plein contrasté + liseré sur toute la ligne,
-   repérable sans avoir à lire l'article. */
-.item[data-priority="2"] .item-priority {
+.item[data-priority="1"] {
+  --priority-color: var(--priority-normal);
+}
+
+.item[data-priority="2"] {
+  --priority-color: var(--danger);
+}
+
+.item[data-priority] .item-priority {
   color: #fff;
-  background: var(--danger);
+  background: var(--priority-color);
 }
 
-.item[data-priority="2"] .item-content {
-  border-left: 3px solid var(--danger);
+.item[data-priority] .item-content {
+  border-left: 3px solid var(--priority-color);
   padding-left: calc(0.6rem - 3px);
 }
 

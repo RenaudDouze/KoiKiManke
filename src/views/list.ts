@@ -795,15 +795,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       state!.items.filter(
         (i) => i.categoryId === categoryId && (!query || i.name.toLowerCase().includes(query)) && (!hideChecked || !i.checked),
       );
-    // Priorité décroissante (Haute en premier), après le tri cochés-en-dernier
-    // et avant le tri manuel/alphabétique : un article coché reste toujours
-    // en fin de liste quelle que soit sa priorité.
     const sortItems = (items: Item[]): Item[] =>
       [...items].sort(
-        (a, b) =>
-          Number(a.checked) - Number(b.checked) ||
-          priorityOf(b) - priorityOf(a) ||
-          (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
+        (a, b) => Number(a.checked) - Number(b.checked) || (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
       );
 
     const cats = [...state.categories].sort((a, b) => a.order - b.order);
@@ -830,16 +824,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     // Une catégorie entièrement cochée passe après celles encore en cours,
     // même logique que pour les articles au sein d'une catégorie (voir
-    // sortItems ci-dessus). Ensuite, une catégorie contenant un article non
-    // coché de priorité plus élevée remonte avant les autres. Tri stable :
-    // à égalité, l'ordre manuel des catégories (voir cats ci-dessus) est
-    // préservé.
-    const maxPriority = (g: Group): Priority =>
-      g.items.filter((i) => !i.checked).reduce((max, i) => (priorityOf(i) > max ? priorityOf(i) : max), 0 as Priority);
-    groups.sort(
-      (a, b) =>
-        Number(a.items.every((i) => i.checked)) - Number(b.items.every((i) => i.checked)) || maxPriority(b) - maxPriority(a),
-    );
+    // sortItems ci-dessus). Tri stable : ne touche pas à l'ordre relatif au
+    // sein de chaque groupe (complet / non complet).
+    groups.sort((a, b) => Number(a.items.every((i) => i.checked)) - Number(b.items.every((i) => i.checked)));
 
     if (groups.length === 0 && query) {
       container.innerHTML = `<div class="empty-state">Aucun article ne correspond à « ${escapeHtml(searchQuery.trim())} ».</div>`;
@@ -1009,7 +996,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // (l'ordre est alors recalculé à chaque rendu).
     const priority = priorityOf(item);
     return `
-      <li class="item ${item.checked ? "checked" : ""}" data-id="${item.id}">
+      <li class="item ${item.checked ? "checked" : ""}" data-id="${item.id}" data-priority="${priority}">
         <div class="item-swipe-bg" aria-hidden="true">${icons.trash}</div>
         <div class="item-content">
           <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>

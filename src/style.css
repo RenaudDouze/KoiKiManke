@@ -664,14 +664,23 @@ button:focus-visible {
 .item-priority {
   flex-shrink: 0;
   color: var(--text-muted);
+  border-radius: 999px;
 }
 
-.item-priority[data-priority="0"] {
+.item[data-priority="0"] .item-priority {
   opacity: 0.4;
 }
 
-.item-priority[data-priority="2"] {
-  color: var(--danger);
+/* Priorité Haute : drapeau plein contrasté + liseré sur toute la ligne,
+   repérable sans avoir à lire l'article (voir aussi .item-content ci-dessus). */
+.item[data-priority="2"] .item-priority {
+  color: #fff;
+  background: var(--danger);
+}
+
+.item[data-priority="2"] .item-content {
+  border-left: 3px solid var(--danger);
+  padding-left: calc(0.6rem - 3px);
 }
 
 .item-delete {

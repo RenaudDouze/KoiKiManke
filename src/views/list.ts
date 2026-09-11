@@ -1008,9 +1008,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         <div class="item-content">
           <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
           <input type="checkbox" class="item-check" data-id="${item.id}" ${item.checked ? "checked" : ""} />
+          <button class="item-priority" data-action="cycle-priority" data-id="${item.id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)"></button>
           <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${item.id}">${escapeHtml(item.quantity) || "+"}</span>
           <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
-          <button class="icon-btn item-priority" data-action="cycle-priority" data-id="${item.id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)">${icons.flag}</button>
           <button class="icon-btn item-delete" data-action="delete-item" data-id="${item.id}" aria-label="Supprimer">${icons.trash}</button>
         </div>
       </li>

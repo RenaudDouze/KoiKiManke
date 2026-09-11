@@ -478,6 +478,37 @@ test("la priorité d'un article se cycle par clic, sans changer l'ordre des arti
   await expect(poiresItem).toHaveAttribute("data-priority", "0");
 });
 
+test("changer la priorité s'affiche immédiatement, sans attendre la confirmation serveur", async ({ page }) => {
+  // Retarde artificiellement tous les messages entrants (serveur -> page) le
+  // temps du test, mais laisse circuler ceux sortants (page -> serveur)
+  // sans délai : si le badge de priorité n'apparaissait qu'après l'aller-
+  // retour serveur (comme avant la mise à jour optimiste), l'assertion au
+  // timeout court ci-dessous échouerait.
+  await page.routeWebSocket(
+    (url) => url.pathname.endsWith("/ws"),
+    (ws) => {
+      const server = ws.connectToServer();
+      server.onMessage((message) => {
+        setTimeout(() => ws.send(message), 1500);
+      });
+    },
+  );
+
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.fill("#add-input", "Lait");
+  await page.click(".add-submit");
+  await expect(page.locator(".item")).toHaveCount(1, { timeout: 10_000 });
+
+  const priorityBtn = page.locator(".item-priority");
+  await expect(priorityBtn).toHaveAttribute("data-priority", "1");
+  await priorityBtn.click();
+  await expect(priorityBtn).toHaveAttribute("data-priority", "2", { timeout: 400 });
+});
+
 test("on peut choisir manuellement la couleur d'une catégorie, puis revenir à l'automatique", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");

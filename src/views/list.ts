@@ -884,7 +884,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       btn.addEventListener("click", () => {
         const item = state!.items.find((i) => i.id === btn.dataset.id);
         if (!item) return;
-        conn.send({ type: "updateItem", id: item.id, priority: cyclePriority(priorityOf(item)) });
+        const next = cyclePriority(priorityOf(item));
+        // Mise à jour optimiste : sans elle, le badge n'apparaît qu'après
+        // l'aller-retour serveur (contrairement à la case à cocher, qui a
+        // un retour visuel natif immédiat). L'état reçu en confirmation
+        // écrasera de toute façon cette valeur locale (voir onStateUpdate).
+        item.priority = next;
+        renderCategories();
+        conn.send({ type: "updateItem", id: item.id, priority: next });
       });
     });
 

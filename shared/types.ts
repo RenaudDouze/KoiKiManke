@@ -10,6 +10,9 @@ export interface Category {
   color?: number;
 }
 
+/** 0 = Basse, 1 = Normale, 2 = Haute. */
+export type Priority = 0 | 1 | 2;
+
 export interface Item {
   id: string;
   /** Item name with any leading/trailing quantity already stripped out. */
@@ -19,6 +22,9 @@ export interface Item {
   categoryId: string | null;
   checked: boolean;
   order: number;
+  /** Optional for backward compatibility with items created before this
+   * field existed — always read via `item.priority ?? 1` (Normale). */
+  priority?: Priority;
   createdAt: number;
   updatedAt: number;
 }
@@ -49,7 +55,7 @@ export type ClientMessage =
   | { type: "sync" }
   | { type: "renameList"; name: string }
   | { type: "addItem"; id: string; rawText: string; categoryId: string | null }
-  | { type: "updateItem"; id: string; name?: string; quantity?: string; categoryId?: string | null }
+  | { type: "updateItem"; id: string; name?: string; quantity?: string; categoryId?: string | null; priority?: Priority }
   | { type: "toggleItem"; id: string; checked: boolean }
   | { type: "deleteItem"; id: string }
   | { type: "clearChecked" }

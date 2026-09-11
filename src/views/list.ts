@@ -1,4 +1,4 @@
-import type { Category, HistoryEntry, Item, ListState } from "../../shared/types";
+import type { Category, HistoryEntry, Item, ListState, Priority } from "../../shared/types";
 import { parseFreeText } from "../../shared/quantity";
 import { ListConnection } from "../lib/ws";
 import { fetchListState } from "../lib/http";
@@ -41,6 +41,12 @@ const CATEGORY_COLOR_HUES: readonly { hue: number; name: string }[] = [
   { hue: 300, name: "Violet" },
   { hue: 330, name: "Rose" },
 ];
+
+// Item sans priority explicite (créé avant l'introduction du champ) :
+// traité comme Normale, pour ne rien changer à l'ordre existant.
+const PRIORITY_LABELS = ["Basse", "Normale", "Haute"] as const;
+const priorityOf = (item: Item): Priority => item.priority ?? 1;
+const cyclePriority = (p: Priority): Priority => (((p + 1) % 3) as Priority);
 
 function colorPaletteHtml(category: Category): string {
   const autoSelected = category.color === undefined;
@@ -789,9 +795,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       state!.items.filter(
         (i) => i.categoryId === categoryId && (!query || i.name.toLowerCase().includes(query)) && (!hideChecked || !i.checked),
       );
+    // Priorité décroissante (Haute en premier), après le tri cochés-en-dernier
+    // et avant le tri manuel/alphabétique : un article coché reste toujours
+    // en fin de liste quelle que soit sa priorité.
     const sortItems = (items: Item[]): Item[] =>
       [...items].sort(
-        (a, b) => Number(a.checked) - Number(b.checked) || (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
+        (a, b) =>
+          Number(a.checked) - Number(b.checked) ||
+          priorityOf(b) - priorityOf(a) ||
+          (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
       );
 
     const cats = [...state.categories].sort((a, b) => a.order - b.order);
@@ -818,9 +830,16 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     // Une catégorie entièrement cochée passe après celles encore en cours,
     // même logique que pour les articles au sein d'une catégorie (voir
-    // sortItems ci-dessus). Tri stable : ne touche pas à l'ordre relatif au
-    // sein de chaque groupe (complet / non complet).
-    groups.sort((a, b) => Number(a.items.every((i) => i.checked)) - Number(b.items.every((i) => i.checked)));
+    // sortItems ci-dessus). Ensuite, une catégorie contenant un article non
+    // coché de priorité plus élevée remonte avant les autres. Tri stable :
+    // à égalité, l'ordre manuel des catégories (voir cats ci-dessus) est
+    // préservé.
+    const maxPriority = (g: Group): Priority =>
+      g.items.filter((i) => !i.checked).reduce((max, i) => (priorityOf(i) > max ? priorityOf(i) : max), 0 as Priority);
+    groups.sort(
+      (a, b) =>
+        Number(a.items.every((i) => i.checked)) - Number(b.items.every((i) => i.checked)) || maxPriority(b) - maxPriority(a),
+    );
 
     if (groups.length === 0 && query) {
       container.innerHTML = `<div class="empty-state">Aucun article ne correspond à « ${escapeHtml(searchQuery.trim())} ».</div>`;
@@ -871,6 +890,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       cb.addEventListener("change", () => {
         conn.send({ type: "toggleItem", id: cb.dataset.id!, checked: cb.checked });
         if (cb.checked) navigator.vibrate?.(10);
+      });
+    });
+
+    container.querySelectorAll<HTMLElement>(".item-priority").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const item = state!.items.find((i) => i.id === btn.dataset.id);
+        if (!item) return;
+        conn.send({ type: "updateItem", id: item.id, priority: cyclePriority(priorityOf(item)) });
       });
     });
 
@@ -964,7 +991,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     disposeSwipe = enableSwipeToDelete(container, {
       itemSelector: ".item",
       contentSelector: ".item-content",
-      ignoreSelector: ".item-drag-handle, .item-check, .item-delete",
+      ignoreSelector: ".item-drag-handle, .item-check, .item-priority, .item-delete",
       onDelete: (el) => {
         const item = state!.items.find((i) => i.id === el.dataset.id);
         if (!item) return;
@@ -980,6 +1007,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // étant de le supprimer puis de le rajouter). Seul le repositionnement
     // au sein d'une même catégorie devient sans effet visuel dans ce mode
     // (l'ordre est alors recalculé à chaque rendu).
+    const priority = priorityOf(item);
     return `
       <li class="item ${item.checked ? "checked" : ""}" data-id="${item.id}">
         <div class="item-swipe-bg" aria-hidden="true">${icons.trash}</div>
@@ -988,6 +1016,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <input type="checkbox" class="item-check" data-id="${item.id}" ${item.checked ? "checked" : ""} />
           <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${item.id}">${escapeHtml(item.quantity) || "+"}</span>
           <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
+          <button class="icon-btn item-priority" data-action="cycle-priority" data-id="${item.id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)">${icons.flag}</button>
           <button class="icon-btn item-delete" data-action="delete-item" data-id="${item.id}" aria-label="Supprimer">${icons.trash}</button>
         </div>
       </li>

@@ -9,7 +9,6 @@
   --primary-contrast: #ffffff;
   --danger: #c4453a;
   --favorite: #d99a00;
-  --priority-low: #3d6a94;
   --checked-bg: #eef1ee;
   --shadow: 0 1px 3px rgba(20, 30, 25, 0.08), 0 1px 2px rgba(20, 30, 25, 0.06);
   color-scheme: light;
@@ -27,7 +26,6 @@
     --primary-contrast: #06150d;
     --danger: #e2685d;
     --favorite: #f0b429;
-    --priority-low: #6fa8dc;
     --checked-bg: #1f2a25;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
@@ -45,7 +43,6 @@
   --primary-contrast: #06150d;
   --danger: #e2685d;
   --favorite: #f0b429;
-  --priority-low: #6fa8dc;
   --checked-bg: #1f2a25;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
@@ -670,19 +667,15 @@ button:focus-visible {
   border-radius: 999px;
 }
 
-/* Priorités Basse et Haute : drapeau plein contrasté + liseré sur toute la
-   ligne, repérables sans avoir à lire l'article. Normale reste neutre
-   (aucune des deux règles ne s'applique). */
+/* Basse reste discrète (drapeau estompé, sans badge) pour ne pas se
+   démarquer davantage que la priorité Normale, qui elle garde son
+   apparence pleine opacité par défaut (aucune règle dédiée ci-dessous). */
 .item[data-priority="0"] .item-priority {
-  color: #fff;
-  background: var(--priority-low);
+  opacity: 0.4;
 }
 
-.item[data-priority="0"] .item-content {
-  border-left: 3px solid var(--priority-low);
-  padding-left: calc(0.6rem - 3px);
-}
-
+/* Priorité Haute : drapeau plein contrasté + liseré sur toute la ligne,
+   repérable sans avoir à lire l'article. */
 .item[data-priority="2"] .item-priority {
   color: #fff;
   background: var(--danger);

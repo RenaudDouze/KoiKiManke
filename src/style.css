@@ -569,7 +569,7 @@ button:focus-visible {
   cursor: grab;
   color: var(--text-muted);
   font-size: 1.1rem;
-  padding: 0.3em 0.2em;
+  padding: 0.3em 0.1em;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -617,11 +617,11 @@ button:focus-visible {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 0.5rem 0.6rem;
+  padding: 0.5rem 0.5rem;
   touch-action: pan-y;
 }
 
@@ -648,7 +648,7 @@ button:focus-visible {
   font-weight: 700;
   font-size: 0.85rem;
   border-radius: 999px;
-  padding: 0.25em 0.65em;
+  padding: 0.25em 0.5em;
   min-width: 1.6em;
   text-align: center;
   cursor: text;
@@ -704,7 +704,16 @@ button:focus-visible {
 
 .item-delete {
   flex-shrink: 0;
+  font-size: 1rem;
+  padding: 0.3em;
   color: var(--text-muted);
+}
+
+/* Un peu plus compacte que .drag-handle générique (aussi utilisée pour
+   les catégories) : dans une ligne d'article, chaque px gagné profite
+   directement au nom, souvent le plus contraint. */
+.item-drag-handle {
+  font-size: 1rem;
 }
 
 .item-delete:hover {

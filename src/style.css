@@ -667,35 +667,39 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+/* Simple pastille de couleur (gris/bleu/rouge selon la priorité), sans
+   liseré ni fond sur la ligne — repérable au premier coup d'œil sans
+   surcharger visuellement la liste. La zone cliquable dépasse largement
+   la pastille visible (::before), pour rester facile à toucher. */
 .item-priority {
+  position: relative;
   flex-shrink: 0;
-  border-radius: 999px;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: var(--priority-low);
 }
 
-/* Les 3 niveaux partagent le même traitement (drapeau plein contrasté +
-   liseré sur toute la ligne, repérable sans avoir à lire l'article) et ne
-   se distinguent que par la couleur : gris pour Basse, bleu pour Normale,
-   rouge pour Haute. */
-.item[data-priority="0"] {
-  --priority-color: var(--priority-low);
+.item-priority::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
 }
 
-.item[data-priority="1"] {
-  --priority-color: var(--priority-normal);
+.item-priority[data-priority="0"] {
+  background: var(--priority-low);
+  opacity: 0.55;
 }
 
-.item[data-priority="2"] {
-  --priority-color: var(--danger);
+.item-priority[data-priority="1"] {
+  background: var(--priority-normal);
 }
 
-.item[data-priority] .item-priority {
-  color: #fff;
-  background: var(--priority-color);
-}
-
-.item[data-priority] .item-content {
-  border-left: 3px solid var(--priority-color);
-  padding-left: calc(0.6rem - 3px);
+.item-priority[data-priority="2"] {
+  background: var(--danger);
 }
 
 .item-delete {

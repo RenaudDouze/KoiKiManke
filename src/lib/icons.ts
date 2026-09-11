@@ -51,7 +51,6 @@ export const icons = {
   history: svg('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>'),
   checkCircle: svg('<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>'),
   download: svg('<path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M4 21h16"/>'),
-  flag: svg('<path d="M5 21V4"/><path d="M5 4h13l-2.5 4L18 12H5"/>'),
   upload: svg('<path d="M12 20V7"/><path d="m7 12 5-5 5 5"/><path d="M4 21h16"/>'),
 } as const;
 

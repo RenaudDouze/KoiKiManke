@@ -10,7 +10,7 @@ export interface ShareModalActions {
   onImportFile: (file: File) => void;
 }
 
-export function openShareModal(code: string, listName: string, isPrivate: boolean | undefined, actions: ShareModalActions): void {
+export function openShareModal(code: string, listName: string, actions: ShareModalActions): void {
   const url = `${location.origin}${appPath(`/l/${code}`)}`;
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -31,7 +31,7 @@ export function openShareModal(code: string, listName: string, isPrivate: boolea
         <button class="btn" id="share-import"><span class="menu-item-icon">${icons.upload}</span>Importer…</button>
       </div>
       <input type="file" id="share-import-file" accept="application/json" hidden />
-      <p class="add-form-hint">${privacyHint(isPrivate)}</p>
+      <p class="add-form-hint">${privacyHint()}</p>
     </div>
   `;
   document.body.appendChild(overlay);

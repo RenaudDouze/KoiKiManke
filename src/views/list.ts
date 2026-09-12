@@ -334,7 +334,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     panel?.querySelector('[data-action="share"]')?.addEventListener("click", () => {
       if (!state) return;
-      openShareModal(state.code, state.name, state.private, {
+      openShareModal(state.code, state.name, {
         onExport: () => {
           if (state) exportListState(state);
         },
@@ -455,7 +455,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
             <input id="new-category-name" type="text" placeholder="Nouvelle catégorie" maxlength="40" />
             <button type="submit" class="btn primary">Ajouter</button>
           </form>
-          <p class="add-form-hint">${privacyHint(state!.private)}</p>
+          <p class="add-form-hint">${privacyHint()}</p>
         </div>
       `;
       overlay.querySelector(".modal-close")?.addEventListener("click", close);
@@ -658,7 +658,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
               : ""
           }
           <div id="suggestion-list"></div>
-          <p class="add-form-hint">${privacyHint(state!.private)}</p>
+          <p class="add-form-hint">${privacyHint()}</p>
         </div>
       `;
       overlay.querySelector(".modal-close")?.addEventListener("click", close);
@@ -1033,7 +1033,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         <header class="list-header">
           <button class="icon-btn" id="btn-home" aria-label="Accueil">${icons.back}</button>
           <h1 class="list-title" id="list-title">${escapeHtml(s.name)}</h1>
-          ${s.private ? `<span class="lock-badge" title="Mode privé : données chiffrées sur le serveur" aria-label="Mode privé : données chiffrées sur le serveur">${icons.lock}</span>` : ""}
+          <span class="lock-badge" title="Données chiffrées sur le serveur" aria-label="Données chiffrées sur le serveur">${icons.lock}</span>
           <span class="conn-dot ${isConnected ? "online" : ""}" id="conn-dot" title="${isConnected ? "Synchronisé" : "Connexion…"}"></span>
           <button class="icon-btn presence-btn" id="btn-presence" aria-label="Personnes connectées">
             ${icons.users}<span class="presence-count" id="presence-count">1</span>
@@ -1070,13 +1070,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           </div>
           <ul id="suggestions" class="suggestions" hidden></ul>
         </form>
-        <p class="add-form-hint">${privacyHint(s.private)}</p>
+        <p class="add-form-hint">${privacyHint()}</p>
 
         <div id="quick-add" class="quick-add"></div>
 
         <div id="categories" class="categories"></div>
 
-        <p class="list-privacy-note">${privacyHint(s.private)}</p>
+        <p class="list-privacy-note">${privacyHint()}</p>
       </div>
     `;
   }

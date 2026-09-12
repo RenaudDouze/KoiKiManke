@@ -1,11 +1,11 @@
 import type { ListState } from "../../shared/types";
 import { apiUrl } from "./syncWorker";
 
-export async function createList(name: string, isPrivate = false): Promise<ListState> {
+export async function createList(name: string): Promise<ListState> {
   const res = await fetch(apiUrl("/api/lists"), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name, private: isPrivate }),
+    body: JSON.stringify({ name }),
   });
   if (!res.ok) throw new Error("Impossible de créer la liste.");
   return res.json();

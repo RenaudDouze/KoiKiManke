@@ -51,9 +51,7 @@ export default {
     }
 
     if (url.pathname === "/api/lists" && request.method === "POST") {
-      const body = await request
-        .json<{ name?: string; private?: boolean }>()
-        .catch(() => ({}) as { name?: string; private?: boolean });
+      const body = await request.json<{ name?: string }>().catch(() => ({}) as { name?: string });
 
       let code = generateCode();
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -66,7 +64,7 @@ export default {
       const stub = env.LIST_ROOM.get(env.LIST_ROOM.idFromName(code));
       const res = await stub.fetch("https://list.internal/init", {
         method: "POST",
-        body: JSON.stringify({ code, name: body.name, private: body.private }),
+        body: JSON.stringify({ code, name: body.name }),
         headers: { "content-type": "application/json" },
       });
       return jsonPassthrough(res);

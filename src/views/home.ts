@@ -3,6 +3,7 @@ import { getRecentLists, forgetRecentList, touchRecentList, toggleFavoriteList, 
 import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
+import { privacyHint } from "../lib/privacyHint";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
@@ -36,10 +37,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
           <div class="logo">${icons.cart}</div>
           <h1>KoiKiManke</h1>
           <p class="tagline">Une liste de courses partagée, synchronisée en direct.</p>
-          <p class="tagline privacy-note">
-            Les données ne sont ni chiffrées ni protégées : n'y mets rien de privé ou
-            de sensible.
-          </p>
+          <p class="tagline privacy-note">${privacyHint()}</p>
         </header>
 
         ${
@@ -68,15 +66,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
             <input id="create-name" type="text" placeholder="Nom de la liste (optionnel)" maxlength="60" />
             <button type="submit" class="btn primary">Créer</button>
           </form>
-          <label class="checkbox-row">
-            <input id="create-private" type="checkbox" />
-            Mode privé (données chiffrées sur le serveur)
-          </label>
-          <p class="add-form-hint">
-            Les données ne sont ni chiffrées ni protégées par défaut : n'y mets rien de privé ou de sensible. Le mode
-            privé chiffre le contenu de cette liste sur le serveur — mais toute personne avec le code peut toujours
-            l'ouvrir et la modifier normalement, comme sans ce mode.
-          </p>
+          <p class="add-form-hint">${privacyHint()}</p>
         </section>
 
         <section class="card">
@@ -99,11 +89,10 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
       e.preventDefault();
       const form = e.target as HTMLFormElement;
       const nameInput = root.querySelector("#create-name") as HTMLInputElement;
-      const privateInput = root.querySelector("#create-private") as HTMLInputElement;
       const btn = form.querySelector("button") as HTMLButtonElement;
       btn.disabled = true;
       try {
-        const state = await createList(nameInput.value.trim() || "Liste de courses", privateInput.checked);
+        const state = await createList(nameInput.value.trim() || "Liste de courses");
         touchRecentList(state.code, state.name);
         navigate(`/l/${state.code}`);
       } catch {

@@ -49,14 +49,6 @@ export interface ListState {
   history: HistoryEntry[];
   createdAt: number;
   updatedAt: number;
-  /** Set once at creation, never changed afterwards. When true, the worker
-   * stores this list's data encrypted at rest (see worker/crypto.ts) using
-   * a key derived from `code` — protects against reading the raw Durable
-   * Object storage without the code, not against anyone who already has
-   * the code/share link (they can open the list normally either way).
-   * Optional for backward compatibility with lists created before this
-   * field existed — always read via `state.private ?? false`. */
-  private?: boolean;
 }
 
 export type ClientMessage =

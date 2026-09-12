@@ -14,10 +14,11 @@ interface Env {
 
 const STORAGE_KEY = "state";
 
-/** What a "private" list's storage record looks like — everything but the
- * `encrypted` marker itself is opaque ciphertext (see worker/crypto.ts). A
- * non-private list is still stored as a plain ListState, so this shape never
- * overlaps with it (ListState never has an `encrypted` field). */
+/** Every list is stored encrypted (see worker/crypto.ts) — everything but the
+ * `encrypted` marker itself is opaque ciphertext. The plain-ListState variant
+ * only still matters for reading lists persisted before encryption became
+ * unconditional: the next write to one of those re-persists it encrypted,
+ * so this is a one-way, lazy migration with no explicit step needed. */
 type StoredRecord = ListState | ({ encrypted: true } & EncryptedPayload);
 
 export class ListRoom extends DurableObject<Env> {
@@ -60,7 +61,7 @@ export class ListRoom extends DurableObject<Env> {
 
     if (request.method === "POST") {
       if (!this.listState) {
-        const body = await request.json<{ code: string; name?: string; private?: boolean }>();
+        const body = await request.json<{ code: string; name?: string }>();
         const now = Date.now();
         this.listState = {
           code: body.code,
@@ -70,7 +71,6 @@ export class ListRoom extends DurableObject<Env> {
           history: [],
           createdAt: now,
           updatedAt: now,
-          private: Boolean(body.private),
         };
         await this.persist();
       }
@@ -145,11 +145,7 @@ export class ListRoom extends DurableObject<Env> {
   private async persist(): Promise<void> {
     if (!this.listState) return;
     this.listState.updatedAt = Date.now();
-    if (this.listState.private) {
-      const payload = await encryptJson(this.listState.code, this.listState);
-      await this.ctx.storage.put<StoredRecord>(STORAGE_KEY, { encrypted: true, ...payload });
-    } else {
-      await this.ctx.storage.put<StoredRecord>(STORAGE_KEY, this.listState);
-    }
+    const payload = await encryptJson(this.listState.code, this.listState);
+    await this.ctx.storage.put<StoredRecord>(STORAGE_KEY, { encrypted: true, ...payload });
   }
 }

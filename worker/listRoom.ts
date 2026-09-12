@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { ListState, ClientMessage, ServerMessage } from "../shared/types";
 import { applyMessage } from "./reducer";
 import { sanitizeParticipantName } from "./presence";
+import { encryptJson, decryptJson, type EncryptedPayload } from "./crypto";
 
 interface ConnectionAttachment {
   name: string;
@@ -13,13 +14,28 @@ interface Env {
 
 const STORAGE_KEY = "state";
 
+/** What a "private" list's storage record looks like — everything but the
+ * `encrypted` marker itself is opaque ciphertext (see worker/crypto.ts). A
+ * non-private list is still stored as a plain ListState, so this shape never
+ * overlaps with it (ListState never has an `encrypted` field). */
+type StoredRecord = ListState | ({ encrypted: true } & EncryptedPayload);
+
 export class ListRoom extends DurableObject<Env> {
   private listState: ListState | null = null;
   private loaded = false;
 
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
-    this.listState = (await this.ctx.storage.get<ListState>(STORAGE_KEY)) ?? null;
+    const raw = (await this.ctx.storage.get<StoredRecord>(STORAGE_KEY)) ?? null;
+    if (raw && "encrypted" in raw) {
+      // The code is never in the encrypted payload itself (chicken-and-egg) —
+      // it's the Durable Object's own name, since every instance is looked
+      // up via idFromName(code) (see worker/index.ts).
+      const code = this.ctx.id.name!;
+      this.listState = await decryptJson<ListState>(code, raw);
+    } else {
+      this.listState = raw;
+    }
     this.loaded = true;
   }
 
@@ -44,7 +60,7 @@ export class ListRoom extends DurableObject<Env> {
 
     if (request.method === "POST") {
       if (!this.listState) {
-        const body = await request.json<{ code: string; name?: string }>();
+        const body = await request.json<{ code: string; name?: string; private?: boolean }>();
         const now = Date.now();
         this.listState = {
           code: body.code,
@@ -54,6 +70,7 @@ export class ListRoom extends DurableObject<Env> {
           history: [],
           createdAt: now,
           updatedAt: now,
+          private: Boolean(body.private),
         };
         await this.persist();
       }
@@ -128,6 +145,11 @@ export class ListRoom extends DurableObject<Env> {
   private async persist(): Promise<void> {
     if (!this.listState) return;
     this.listState.updatedAt = Date.now();
-    await this.ctx.storage.put(STORAGE_KEY, this.listState);
+    if (this.listState.private) {
+      const payload = await encryptJson(this.listState.code, this.listState);
+      await this.ctx.storage.put<StoredRecord>(STORAGE_KEY, { encrypted: true, ...payload });
+    } else {
+      await this.ctx.storage.put<StoredRecord>(STORAGE_KEY, this.listState);
+    }
   }
 }

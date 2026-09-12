@@ -36,15 +36,22 @@ Cloudflare (Workers + Durable Objects, sans base de données externe).
   dépendants de la plateforme) pour une interface plus lisible.
 - **Accessibilité** : focus piégé et restauré dans les modales, navigation
   clavier.
+- **Mode privé** (optionnel, à la création) : chiffre les données de la
+  liste au repos sur le serveur (voir [Confidentialité](#confidentialité)).
 
 ## Confidentialité
 
 Le seul contrôle d'accès à une liste est son code à 6 caractères : il n'y a
-ni compte, ni mot de passe, ni chiffrement des données stockées. Toute
-personne qui obtient le code peut voir et modifier la liste. Cette
-application n'est donc pas conçue pour des informations personnelles ou
-sensibles — un rappel affiché sur l'écran d'accueil le précise aux
-utilisateurs.
+ni compte ni mot de passe. Toute personne qui obtient le code peut voir et
+modifier la liste, avec ou sans mode privé — un rappel affiché sur l'écran
+d'accueil le précise aux utilisateurs.
+
+Par défaut, les données sont stockées en clair côté serveur. Un **mode
+privé**, activable à la création d'une liste, les chiffre au repos
+(AES-GCM, clé dérivée du code de la liste — voir `worker/crypto.ts`) : ça
+protège contre un accès direct au stockage brut du Durable Object sans
+connaître le code, mais pas contre quelqu'un qui a déjà le code/lien de
+partage, qui peut ouvrir la liste normalement dans les deux cas.
 
 ## Stack technique
 

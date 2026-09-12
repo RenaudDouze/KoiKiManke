@@ -3,13 +3,14 @@ import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { trapFocus } from "../lib/focusTrap";
 import { appPath } from "../lib/basePath";
+import { privacyHint } from "../lib/privacyHint";
 
 export interface ShareModalActions {
   onExport: () => void;
   onImportFile: (file: File) => void;
 }
 
-export function openShareModal(code: string, listName: string, actions: ShareModalActions): void {
+export function openShareModal(code: string, listName: string, isPrivate: boolean | undefined, actions: ShareModalActions): void {
   const url = `${location.origin}${appPath(`/l/${code}`)}`;
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -30,7 +31,7 @@ export function openShareModal(code: string, listName: string, actions: ShareMod
         <button class="btn" id="share-import"><span class="menu-item-icon">${icons.upload}</span>Importer…</button>
       </div>
       <input type="file" id="share-import-file" accept="application/json" hidden />
-      <p class="add-form-hint">Les données ne sont ni chiffrées ni protégées : n'y mets rien de privé ou de sensible.</p>
+      <p class="add-form-hint">${privacyHint(isPrivate)}</p>
     </div>
   `;
   document.body.appendChild(overlay);

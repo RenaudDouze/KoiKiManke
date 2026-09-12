@@ -10,6 +10,15 @@ export interface DragReorderOptions {
  * items between category groups). No external dependency. */
 export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): () => void {
   let dragEl: HTMLElement | null = null;
+  // elementFromPoint()/getBoundingClientRect() forcent un reflow ; les
+  // limiter à une fois par frame (au lieu d'une fois par pointermove, qui
+  // peut arriver bien plus souvent) évite de refaire ce travail pour rien
+  // entre deux peintures. e.preventDefault() reste appelé à chaque event
+  // (nécessaire tout de suite pour bloquer le scroll tactile pendant le
+  // glisser), seul le hit-test/déplacement DOM est différé.
+  let rafId: number | null = null;
+  let pendingX = 0;
+  let pendingY = 0;
 
   function onPointerDown(e: PointerEvent) {
     if (e.button !== undefined && e.button !== 0) return;
@@ -35,9 +44,17 @@ export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): 
   function onPointerMove(e: PointerEvent) {
     if (!dragEl) return;
     e.preventDefault();
+    pendingX = e.clientX;
+    pendingY = e.clientY;
+    if (rafId === null) rafId = requestAnimationFrame(processPendingMove);
+  }
+
+  function processPendingMove() {
+    rafId = null;
+    if (!dragEl) return;
     const prevPointerEvents = dragEl.style.pointerEvents;
     dragEl.style.pointerEvents = "none";
-    const overEl = document.elementFromPoint(e.clientX, e.clientY);
+    const overEl = document.elementFromPoint(pendingX, pendingY);
     dragEl.style.pointerEvents = prevPointerEvents;
     if (!overEl) return;
 
@@ -47,7 +64,7 @@ export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): 
     const overItem = overEl.closest(opts.itemSelector) as HTMLElement | null;
     if (overItem && overItem !== dragEl && container.contains(overItem)) {
       const rect = overItem.getBoundingClientRect();
-      const before = e.clientY < rect.top + rect.height / 2;
+      const before = pendingY < rect.top + rect.height / 2;
       container.insertBefore(dragEl, before ? overItem : overItem.nextSibling);
     } else if (!overItem && !container.contains(dragEl)) {
       container.appendChild(dragEl);
@@ -58,6 +75,14 @@ export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): 
     document.removeEventListener("pointermove", onPointerMove);
     document.removeEventListener("pointerup", onPointerUp);
     document.removeEventListener("pointercancel", onPointerUp);
+    // Un déplacement en attente doit être appliqué avant le drop, pas
+    // simplement annulé : sinon la dernière position (potentiellement à
+    // peine plus tôt qu'une frame) n'aurait jamais son effet.
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+      processPendingMove();
+    }
     const el = dragEl;
     dragEl = null;
     if (el) {

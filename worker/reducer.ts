@@ -9,7 +9,13 @@ import { historyKey } from "../shared/historyKey";
 export const MAX_HISTORY = 300;
 
 export function nextOrder(list: { order: number }[]): number {
-  return list.length === 0 ? 0 : Math.max(...list.map((x) => x.order)) + 1;
+  // Boucle plutôt que Math.max(...list.map(...)) : évite d'allouer un
+  // tableau intermédiaire et une pile d'arguments qui grandit avec la liste
+  // (Math.max(...arr) plante au-delà de plusieurs dizaines de milliers
+  // d'éléments selon le moteur).
+  let max = -1;
+  for (const x of list) if (x.order > max) max = x.order;
+  return max + 1;
 }
 
 /** A category id only survives if it still names a real category — never

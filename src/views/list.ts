@@ -21,7 +21,7 @@ import { cycleItemSortPreference, getItemSortPreference, itemSortLabel } from ".
 import { getHideCheckedPreference, toggleHideCheckedPreference } from "../lib/hideCheckedPreference";
 import { getDeviceName } from "../lib/presence";
 import { historyKey } from "../../shared/historyKey";
-import { privacyHint } from "../lib/privacyHint";
+import { PRIVACY_HINT } from "../lib/privacyHint";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
@@ -289,7 +289,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
     const searchBar = root.querySelector("#search-bar") as HTMLElement | null;
     const searchInput = root.querySelector("#search-input") as HTMLInputElement | null;
+    let searchDebounce: ReturnType<typeof setTimeout> | null = null;
     const closeSearch = () => {
+      if (searchDebounce) clearTimeout(searchDebounce);
       if (searchBar) searchBar.hidden = true;
       searchQuery = "";
       if (searchInput) searchInput.value = "";
@@ -303,8 +305,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     });
     root.querySelector("#search-close")?.addEventListener("click", closeSearch);
     searchInput?.addEventListener("input", () => {
-      searchQuery = searchInput.value;
-      renderCategories();
+      // Attend une courte pause dans la frappe avant de reconstruire toute
+      // la liste (renderCategories() n'est pas incrémental) : sur une liste
+      // chargée, filtrer à chaque caractère tapé referait tout le travail à
+      // chaque frappe pour rien.
+      if (searchDebounce) clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => {
+        searchQuery = searchInput.value;
+        renderCategories();
+      }, 150);
     });
     searchInput?.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeSearch();
@@ -460,7 +469,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
             <input id="new-category-name" type="text" placeholder="Nouvelle catégorie" maxlength="40" />
             <button type="submit" class="btn primary">Ajouter</button>
           </form>
-          <p class="add-form-hint">${privacyHint()}</p>
+          <p class="add-form-hint">${PRIVACY_HINT}</p>
         </div>
       `;
       overlay.querySelector(".modal-close")?.addEventListener("click", close);
@@ -663,7 +672,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
               : ""
           }
           <div id="suggestion-list"></div>
-          <p class="add-form-hint">${privacyHint()}</p>
+          <p class="add-form-hint">${PRIVACY_HINT}</p>
         </div>
       `;
       overlay.querySelector(".modal-close")?.addEventListener("click", close);
@@ -1076,13 +1085,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           </div>
           <ul id="suggestions" class="suggestions" hidden></ul>
         </form>
-        <p class="add-form-hint">${privacyHint()}</p>
+        <p class="add-form-hint">${PRIVACY_HINT}</p>
 
         <div id="quick-add" class="quick-add"></div>
 
         <div id="categories" class="categories"></div>
 
-        <p class="list-privacy-note">${privacyHint()}</p>
+        <p class="list-privacy-note">${PRIVACY_HINT}</p>
       </div>
     `;
   }

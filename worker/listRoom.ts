@@ -94,8 +94,12 @@ export class ListRoom extends DurableObject<Env> {
 
     try {
       applyMessage(this.listState, msg);
-      await this.persist();
+      // Diffuse depuis l'état déjà muté en mémoire avant d'attendre la
+      // persistance (chiffrement + écriture de la liste entière) : les autres
+      // appareils voient la mise à jour sans payer ce coût sur le chemin
+      // critique de la synchronisation temps réel.
       this.broadcast();
+      await this.persist();
     } catch (err) {
       ws.send(
         JSON.stringify({ type: "error", message: err instanceof Error ? err.message : "Erreur inconnue" } satisfies ServerMessage),

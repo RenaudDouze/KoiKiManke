@@ -54,6 +54,14 @@
   color-scheme: dark;
 }
 
+/* Mode accessibilité : grossit tout d'un coup. Le reste de style.css est
+   déjà exprimé en rem/em (icônes comprises, voir icons.ts) donc augmenter
+   la taille de police racine fait grossir en cascade textes, icônes,
+   paddings et espacements, sans devoir reprendre chaque règle. */
+:root[data-text-size="large"] {
+  font-size: 125%;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -154,10 +162,15 @@ button:focus-visible {
   gap: 1.25rem;
 }
 
-.theme-toggle {
+.home-toggles {
   position: absolute;
   top: 1rem;
   right: 1rem;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.home-toggles .icon-btn {
   font-size: 1.2rem;
 }
 
@@ -210,6 +223,16 @@ button:focus-visible {
 .row {
   display: flex;
   gap: 0.5rem;
+}
+
+/* En grand texte, un bouton à largeur fixe à côté d'un champ qui rétrécit
+   finit par tronquer son placeholder — mieux vaut les empiler. */
+:root[data-text-size="large"] .row {
+  flex-wrap: wrap;
+}
+
+:root[data-text-size="large"] .row input {
+  flex-basis: 100%;
 }
 
 .row input {
@@ -317,6 +340,16 @@ button:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* En grand texte, la rangée d'icônes de droite ne tient plus à côté du nom
+   sans l'écraser à quelques caractères — on la laisse passer à la ligne. */
+:root[data-text-size="large"] .list-header {
+  flex-wrap: wrap;
+}
+
+:root[data-text-size="large"] .list-title {
+  min-width: 8rem;
 }
 
 .list-title:hover {
@@ -428,6 +461,21 @@ button:focus-visible {
 .add-row {
   display: flex;
   gap: 0.4rem;
+}
+
+/* Même souci qu'avec .add-row : le champ de saisie ne doit pas finir écrasé
+   entre le sélecteur de catégorie et le bouton d'ajout. */
+:root[data-text-size="large"] .add-row {
+  flex-wrap: wrap;
+}
+
+:root[data-text-size="large"] .add-input-wrap {
+  flex-basis: 100%;
+}
+
+:root[data-text-size="large"] #add-category {
+  flex: 1;
+  max-width: none;
 }
 
 .add-input-wrap {

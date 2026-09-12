@@ -4,7 +4,7 @@ import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 import { toggleAccessibilityPreference, getAccessibilityPreference, accessibilityLabel } from "../lib/accessibility";
-import { privacyHint } from "../lib/privacyHint";
+import { PRIVACY_HINT } from "../lib/privacyHint";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
@@ -44,7 +44,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
           <div class="logo">${icons.cart}</div>
           <h1>KoiKiManke</h1>
           <p class="tagline">Une liste de courses partagée, synchronisée en direct.</p>
-          <p class="tagline privacy-note">${privacyHint()}</p>
+          <p class="tagline privacy-note">${PRIVACY_HINT}</p>
         </header>
 
         ${
@@ -73,7 +73,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
             <input id="create-name" type="text" placeholder="Nom de la liste (optionnel)" maxlength="60" />
             <button type="submit" class="btn primary">Créer</button>
           </form>
-          <p class="add-form-hint">${privacyHint()}</p>
+          <p class="add-form-hint">${PRIVACY_HINT}</p>
         </section>
 
         <section class="card">

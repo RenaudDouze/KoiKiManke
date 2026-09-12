@@ -194,6 +194,15 @@ button:focus-visible {
   margin: 0.4rem 0 0;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -321,6 +330,14 @@ button:focus-visible {
 
 .list-title:hover {
   background: var(--checked-bg);
+}
+
+.lock-badge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  flex-shrink: 0;
 }
 
 .conn-dot {

@@ -68,7 +68,15 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
             <input id="create-name" type="text" placeholder="Nom de la liste (optionnel)" maxlength="60" />
             <button type="submit" class="btn primary">Créer</button>
           </form>
-          <p class="add-form-hint">Les données ne sont ni chiffrées ni protégées : n'y mets rien de privé ou de sensible.</p>
+          <label class="checkbox-row">
+            <input id="create-private" type="checkbox" />
+            Mode privé (données chiffrées sur le serveur)
+          </label>
+          <p class="add-form-hint">
+            Les données ne sont ni chiffrées ni protégées par défaut : n'y mets rien de privé ou de sensible. Le mode
+            privé chiffre le contenu de cette liste sur le serveur — mais toute personne avec le code peut toujours
+            l'ouvrir et la modifier normalement, comme sans ce mode.
+          </p>
         </section>
 
         <section class="card">
@@ -91,10 +99,11 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
       e.preventDefault();
       const form = e.target as HTMLFormElement;
       const nameInput = root.querySelector("#create-name") as HTMLInputElement;
+      const privateInput = root.querySelector("#create-private") as HTMLInputElement;
       const btn = form.querySelector("button") as HTMLButtonElement;
       btn.disabled = true;
       try {
-        const state = await createList(nameInput.value.trim() || "Liste de courses");
+        const state = await createList(nameInput.value.trim() || "Liste de courses", privateInput.checked);
         touchRecentList(state.code, state.name);
         navigate(`/l/${state.code}`);
       } catch {

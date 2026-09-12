@@ -16,7 +16,7 @@ import { trapFocus } from "../lib/focusTrap";
 import { resolveCategoryHue } from "../lib/color";
 import { alnumCompare } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
-import { cycleTextSizePreference, getTextSizePreference, textSizeLabel, type TextSizePreference } from "../lib/textSize";
+import { toggleAccessibilityPreference, getAccessibilityPreference, accessibilityLabel } from "../lib/accessibility";
 import { cycleItemSortPreference, getItemSortPreference, itemSortLabel } from "../lib/itemSortPreference";
 import { getHideCheckedPreference, toggleHideCheckedPreference } from "../lib/hideCheckedPreference";
 import { getDeviceName } from "../lib/presence";
@@ -24,7 +24,6 @@ import { historyKey } from "../../shared/historyKey";
 import { privacyHint } from "../lib/privacyHint";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
-const TEXT_SIZE_ICON: Record<TextSizePreference, string> = { normal: icons.zoomIn, large: icons.zoomOut };
 
 // Palette de teintes proposées pour la couleur manuelle d'une catégorie
 // (voir colorPaletteHtml) — un choix curé plutôt qu'un sélecteur de couleur
@@ -347,9 +346,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       cycleThemePreference();
       updateThemeMenuItem(e.currentTarget as HTMLElement);
     });
-    panel?.querySelector('[data-action="text-size"]')?.addEventListener("click", (e) => {
-      cycleTextSizePreference();
-      updateTextSizeMenuItem(e.currentTarget as HTMLElement);
+    panel?.querySelector('[data-action="accessibility"]')?.addEventListener("click", (e) => {
+      toggleAccessibilityPreference();
+      updateAccessibilityMenuItem(e.currentTarget as HTMLElement);
     });
     panel?.querySelector('[data-action="item-sort"]')?.addEventListener("click", (e) => {
       cycleItemSortPreference();
@@ -1051,7 +1050,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <div class="menu-panel" id="menu-panel" hidden>
             <button type="button" data-action="share"><span class="menu-item-icon">${icons.share}</span>Partager</button>
             <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
-            <button type="button" data-action="text-size">${textSizeMenuHtml(getTextSizePreference())}</button>
+            <button type="button" data-action="accessibility">${accessibilityMenuHtml(getAccessibilityPreference())}</button>
             <button type="button" data-action="item-sort">${itemSortMenuHtml(getItemSortPreference())}</button>
             <button type="button" data-action="manage-categories"><span class="menu-item-icon">${icons.tag}</span>Gérer les catégories</button>
             <button type="button" data-action="manage-suggestions"><span class="menu-item-icon">${icons.history}</span>Gérer les suggestions</button>
@@ -1096,12 +1095,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     button.innerHTML = themeMenuHtml(getThemePreference());
   }
 
-  function textSizeMenuHtml(pref: TextSizePreference): string {
-    return `<span class="menu-item-icon">${TEXT_SIZE_ICON[pref]}</span>Taille du texte : ${textSizeLabel(pref)}`;
+  function accessibilityMenuHtml(pref: ReturnType<typeof getAccessibilityPreference>): string {
+    return `<span class="menu-item-icon">${icons.accessibility}</span>Accessibilité : ${accessibilityLabel(pref)}`;
   }
 
-  function updateTextSizeMenuItem(button: HTMLElement): void {
-    button.innerHTML = textSizeMenuHtml(getTextSizePreference());
+  function updateAccessibilityMenuItem(button: HTMLElement): void {
+    button.innerHTML = accessibilityMenuHtml(getAccessibilityPreference());
   }
 
   function itemSortMenuHtml(pref: ReturnType<typeof getItemSortPreference>): string {

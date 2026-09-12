@@ -30,14 +30,15 @@ Cloudflare (Workers + Durable Objects, sans base de données externe).
   bloquante.
 - **Thème clair/sombre/auto**, au choix (bouton dans le menu ⋮ et sur
   l'accueil), en plus de la détection système par défaut.
-- **Grand texte** : un bouton (menu ⋮ et accueil) grossit d'un coup textes,
-  icônes et zones cliquables pour une interface plus visible.
+- **Mode accessibilité** : un bouton (menu ⋮ et accueil) grossit d'un coup
+  textes, icônes et zones cliquables, renforce le contraste des textes et
+  bordures, et coupe transitions/animations.
 - **Recherche** rapide des articles par nom.
 - **Petite célébration** quand le dernier article est coché.
 - **Couleur automatique par catégorie** et icônes cohérentes (pas d'emoji
   dépendants de la plateforme) pour une interface plus lisible.
 - **Accessibilité** : focus piégé et restauré dans les modales, navigation
-  clavier, mode grand texte (voir ci-dessus).
+  clavier, mode accessibilité (voir ci-dessus).
 - **Chiffrement au repos** : les données de chaque liste sont chiffrées sur
   le serveur (voir [Confidentialité](#confidentialité)).
 

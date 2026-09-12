@@ -162,6 +162,14 @@ button:focus-visible {
   gap: 1.25rem;
 }
 
+/* Les marges latérales ne doivent pas grossir avec le texte : sur un écran
+   étroit, ça grignote justement la largeur dont le contenu a le plus besoin
+   une fois agrandi. On les réduit plutôt, sous la normale. */
+:root[data-text-size="large"] .home {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
 .home-toggles {
   position: absolute;
   top: 1rem;
@@ -213,6 +221,11 @@ button:focus-visible {
   border-radius: 14px;
   padding: 1rem;
   box-shadow: var(--shadow);
+}
+
+:root[data-text-size="large"] .card {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
 }
 
 .card h2 {
@@ -318,6 +331,11 @@ button:focus-visible {
   text-align: center;
 }
 
+:root[data-text-size="large"] .list-privacy-note {
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+}
+
 .list-header {
   position: sticky;
   top: 0;
@@ -346,6 +364,8 @@ button:focus-visible {
    sans l'écraser à quelques caractères — on la laisse passer à la ligne. */
 :root[data-text-size="large"] .list-header {
   flex-wrap: wrap;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
 }
 
 :root[data-text-size="large"] .list-title {
@@ -443,6 +463,11 @@ button:focus-visible {
   padding: 0.8rem;
   border-bottom: 1px solid var(--border);
   position: relative;
+}
+
+:root[data-text-size="large"] .add-form {
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
 }
 
 .search-bar {
@@ -572,6 +597,11 @@ button:focus-visible {
 .categories {
   padding: 0.4rem 0.6rem 2rem;
   flex: 1;
+}
+
+:root[data-text-size="large"] .categories {
+  padding-left: 0.3rem;
+  padding-right: 0.3rem;
 }
 
 .category-section + .category-section {
@@ -787,6 +817,11 @@ button:focus-visible {
   text-align: center;
   color: var(--text-muted);
   padding: 3rem 1rem;
+}
+
+:root[data-text-size="large"] .empty-state {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
 }
 
 .centered-message {

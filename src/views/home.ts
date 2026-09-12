@@ -3,7 +3,7 @@ import { getRecentLists, forgetRecentList, touchRecentList, toggleFavoriteList, 
 import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
-import { cycleTextSizePreference, getTextSizePreference, textSizeLabel } from "../lib/textSize";
+import { toggleAccessibilityPreference, getAccessibilityPreference, accessibilityLabel } from "../lib/accessibility";
 import { privacyHint } from "../lib/privacyHint";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
@@ -29,12 +29,12 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
     const favorites = recents.filter((r) => r.favorite);
     const others = recents.filter((r) => !r.favorite);
     const theme = getThemePreference();
-    const textSize = getTextSizePreference();
+    const a11y = getAccessibilityPreference();
     root.innerHTML = `
       <div class="home">
         <div class="home-toggles">
-          <button type="button" class="icon-btn" id="text-size-toggle" aria-label="Taille du texte : ${textSizeLabel(textSize)}" title="Taille du texte : ${textSizeLabel(textSize)}" aria-pressed="${textSize === "large"}">
-            ${textSize === "large" ? icons.zoomOut : icons.zoomIn}
+          <button type="button" class="icon-btn" id="a11y-toggle" aria-label="Accessibilité : ${accessibilityLabel(a11y)}" title="Accessibilité : ${accessibilityLabel(a11y)}" aria-pressed="${a11y === "on"}">
+            ${icons.accessibility}
           </button>
           <button type="button" class="icon-btn" id="theme-toggle" aria-label="Thème : ${themeLabel(theme)}" title="Thème : ${themeLabel(theme)}">
             ${THEME_ICON[theme]}
@@ -91,8 +91,8 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
       cycleThemePreference();
       render();
     });
-    root.querySelector("#text-size-toggle")?.addEventListener("click", () => {
-      cycleTextSizePreference();
+    root.querySelector("#a11y-toggle")?.addEventListener("click", () => {
+      toggleAccessibilityPreference();
       render();
     });
 

@@ -34,6 +34,15 @@
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
   }
+
+  /* Plus spécifique que le bloc clair ci-dessous ([data-theme] en plus,
+     voir la sélection combinée) donc gagne bien quand le système est en
+     sombre sans thème explicite. */
+  :root:not([data-theme="light"])[data-a11y="on"] {
+    --text: #ffffff;
+    --text-muted: #d8d8d8;
+    --border: #9a9a9a;
+  }
 }
 
 :root[data-theme="dark"] {
@@ -54,12 +63,45 @@
   color-scheme: dark;
 }
 
-/* Mode accessibilité : grossit tout d'un coup. Le reste de style.css est
-   déjà exprimé en rem/em (icônes comprises, voir icons.ts) donc augmenter
-   la taille de police racine fait grossir en cascade textes, icônes,
-   paddings et espacements, sans devoir reprendre chaque règle. */
-:root[data-text-size="large"] {
+:root[data-theme="dark"][data-a11y="on"] {
+  --text: #ffffff;
+  --text-muted: #d8d8d8;
+  --border: #9a9a9a;
+}
+
+/* Mode accessibilité : texte agrandi, contraste renforcé, animations
+   coupées. Le reste de style.css est déjà exprimé en rem/em (icônes
+   comprises, voir icons.ts) donc augmenter la taille de police racine fait
+   grossir en cascade textes, icônes, paddings et espacements, sans devoir
+   reprendre chaque règle. Les couleurs ci-dessous sont pour le thème clair —
+   les deux blocs sombres ci-dessus, plus spécifiques, prennent le dessus
+   quand un thème sombre est actif. */
+:root[data-a11y="on"] {
   font-size: 125%;
+  --text: #000000;
+  --text-muted: #333333;
+  --border: #555555;
+}
+
+/* Coupe transitions et animations partout, y compris celles posées en
+   ligne par le JS (swipe, toasts) : une règle !important d'une feuille de
+   style l'emporte sur un style inline non-important. */
+:root[data-a11y="on"] *,
+:root[data-a11y="on"] *::before,
+:root[data-a11y="on"] *::after {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+:root[data-a11y="on"] input:focus,
+:root[data-a11y="on"] select:focus,
+:root[data-a11y="on"] button:focus-visible {
+  outline-width: 3px;
+}
+
+#a11y-toggle[aria-pressed="true"] {
+  color: var(--primary);
 }
 
 * {
@@ -165,7 +207,7 @@ button:focus-visible {
 /* Les marges latérales ne doivent pas grossir avec le texte : sur un écran
    étroit, ça grignote justement la largeur dont le contenu a le plus besoin
    une fois agrandi. On les réduit plutôt, sous la normale. */
-:root[data-text-size="large"] .home {
+:root[data-a11y="on"] .home {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
@@ -223,7 +265,7 @@ button:focus-visible {
   box-shadow: var(--shadow);
 }
 
-:root[data-text-size="large"] .card {
+:root[data-a11y="on"] .card {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
@@ -240,11 +282,11 @@ button:focus-visible {
 
 /* En grand texte, un bouton à largeur fixe à côté d'un champ qui rétrécit
    finit par tronquer son placeholder — mieux vaut les empiler. */
-:root[data-text-size="large"] .row {
+:root[data-a11y="on"] .row {
   flex-wrap: wrap;
 }
 
-:root[data-text-size="large"] .row input {
+:root[data-a11y="on"] .row input {
   flex-basis: 100%;
 }
 
@@ -331,7 +373,7 @@ button:focus-visible {
   text-align: center;
 }
 
-:root[data-text-size="large"] .list-privacy-note {
+:root[data-a11y="on"] .list-privacy-note {
   padding-left: 0.4rem;
   padding-right: 0.4rem;
 }
@@ -362,13 +404,13 @@ button:focus-visible {
 
 /* En grand texte, la rangée d'icônes de droite ne tient plus à côté du nom
    sans l'écraser à quelques caractères — on la laisse passer à la ligne. */
-:root[data-text-size="large"] .list-header {
+:root[data-a11y="on"] .list-header {
   flex-wrap: wrap;
   padding-left: 0.4rem;
   padding-right: 0.4rem;
 }
 
-:root[data-text-size="large"] .list-title {
+:root[data-a11y="on"] .list-title {
   min-width: 8rem;
 }
 
@@ -465,7 +507,7 @@ button:focus-visible {
   position: relative;
 }
 
-:root[data-text-size="large"] .add-form {
+:root[data-a11y="on"] .add-form {
   padding-left: 0.4rem;
   padding-right: 0.4rem;
 }
@@ -490,15 +532,15 @@ button:focus-visible {
 
 /* Même souci qu'avec .add-row : le champ de saisie ne doit pas finir écrasé
    entre le sélecteur de catégorie et le bouton d'ajout. */
-:root[data-text-size="large"] .add-row {
+:root[data-a11y="on"] .add-row {
   flex-wrap: wrap;
 }
 
-:root[data-text-size="large"] .add-input-wrap {
+:root[data-a11y="on"] .add-input-wrap {
   flex-basis: 100%;
 }
 
-:root[data-text-size="large"] #add-category {
+:root[data-a11y="on"] #add-category {
   flex: 1;
   max-width: none;
 }
@@ -599,7 +641,7 @@ button:focus-visible {
   flex: 1;
 }
 
-:root[data-text-size="large"] .categories {
+:root[data-a11y="on"] .categories {
   padding-left: 0.3rem;
   padding-right: 0.3rem;
 }
@@ -819,7 +861,7 @@ button:focus-visible {
   padding: 3rem 1rem;
 }
 
-:root[data-text-size="large"] .empty-state {
+:root[data-a11y="on"] .empty-state {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }

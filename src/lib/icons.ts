@@ -53,8 +53,7 @@ export const icons = {
   download: svg('<path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M4 21h16"/>'),
   upload: svg('<path d="M12 20V7"/><path d="m7 12 5-5 5 5"/><path d="M4 21h16"/>'),
   lock: svg('<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
-  zoomIn: svg('<circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6"/><path d="m21 21-4.3-4.3"/>'),
-  zoomOut: svg('<circle cx="11" cy="11" r="7"/><path d="M8 11h6"/><path d="m21 21-4.3-4.3"/>'),
+  accessibility: svg('<circle cx="12" cy="4" r="2"/><path d="M12 8v5"/><path d="M6 10h12"/><path d="M12 13l-4 8"/><path d="M12 13l4 8"/>'),
 } as const;
 
 export type IconName = keyof typeof icons;

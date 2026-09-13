@@ -280,6 +280,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       toggleHideCheckedPreference();
       updateHideCheckedButton(e.currentTarget as HTMLElement);
       renderCategories();
+      renderQuickAdd();
     });
 
     const presenceBtn = root.querySelector("#btn-presence");
@@ -777,6 +778,10 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   function renderQuickAdd(): void {
     const el = root.querySelector("#quick-add");
     if (!el || !state) return;
+    if (getHideCheckedPreference()) {
+      el.innerHTML = "";
+      return;
+    }
     const items = suggestionPool().slice(0, 12);
     if (items.length === 0) {
       el.innerHTML = "";

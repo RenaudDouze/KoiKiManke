@@ -13,6 +13,7 @@ npm run typecheck      # tsc --noEmit sur tsconfig.worker.json PUIS tsconfig.cli
 npm run test           # vitest run (sans couverture)
 npm run test:watch     # vitest en mode watch
 npm run test:coverage  # vitest run --coverage — seuils 100%, mais sur un périmètre restreint (voir Tests ci-dessous)
+npm run test:mutation  # stryker run — mutation testing sur le même périmètre pur (voir Tests ci-dessous)
 npm run test:e2e       # playwright test — démarre lui-même `vite dev` (voir playwright.config.ts)
 npm run build          # npm run typecheck && vite build (build double : environment "worker" + environment "client")
 npm run preview        # vite preview
@@ -76,6 +77,7 @@ App de liste de courses partagée en temps réel, hébergée entièrement sur Cl
   - Le code de vue/composant DOM-lourd (`src/views/`, `src/components/`, la glue DOM/stockage/réseau de `src/lib/`) est volontairement laissé à la suite Playwright plutôt que d'être forcé dans des tests unitaires qui n'auraient pas de sens.
   - `worker/test/cloudflareWorkersShim.ts` fournit un faux module `cloudflare:workers` (alias dans `vitest.config.ts`) pour que les fichiers qui importent `DurableObject` (`worker/listRoom.ts` — non testé, mais quand même importé transitivement) puissent être chargés par Vitest sous Node, sans le runtime `workerd`.
 - La suite e2e (`e2e/*.spec.ts`) tourne contre une vraie instance `vite dev` (Worker + Durable Object réels via `workerd`), démarrée par Playwright lui-même (`playwright.config.ts`, `webServer`). C'est le seul moyen de tester la synchronisation temps réel multi-onglets, le chiffrement de bout en bout, et tout ce qui dépend du DOM.
+- Mutation testing (`stryker.config.mjs`, Stryker) sur ce même périmètre « logique pure » (`shared/**`, `worker/**` hors `listRoom.ts`, `color.ts`/`sort.ts`) : la couverture 100% garantit que chaque ligne/branche est *exécutée* par un test, pas qu'un test échouerait si son comportement changeait. Stryker mute le code source (inverse une condition, change un opérateur, supprime un appel…) et vérifie que la suite `npm test` échoue à chaque fois ; un mutant qui « survit » signale un trou réel de couverture comportementale. Utilise le test runner `command` (`npm test` relancé pour chaque mutant) plutôt que le runner `vitest` dédié : ce dernier n'exécute quasiment aucun test par mutant dans ce projet (score quasi nul, bug d'intégration non résolu), le runner `command` donne un score fiable au prix d'un `npm test` complet par mutant (~6-7 min en CI). Seuil de rupture à 80% (référence observée : ~86%) — voir les commentaires de `stryker.config.mjs` pour le détail des contournements (tsconfig incompatible avec TypeScript 7, etc.).
 
 ## Fonctionnalités
 

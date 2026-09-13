@@ -47,7 +47,12 @@ const CATEGORY_COLOR_HUES: readonly { hue: number; name: string }[] = [
 // Item sans priority explicite (créé avant l'introduction du champ) :
 // traité comme Normale, pour ne rien changer à l'ordre existant.
 const PRIORITY_LABELS = ["Basse", "Normale", "Haute"] as const;
-const priorityOf = (item: Item): Priority => item.priority ?? 1;
+// Ne fait pas confiance à item.priority au-delà de sa forme réelle : le
+// serveur le valide désormais (voir worker/reducer.ts), mais data-priority
+// n'est pas échappé à l'affichage ci-dessous (c'est un simple entier), donc
+// une valeur déjà persistée avant ce contrôle (ou tout autre bug futur) ne
+// doit jamais s'y retrouver telle quelle.
+const priorityOf = (item: Item): Priority => (item.priority === 0 || item.priority === 1 || item.priority === 2 ? item.priority : 1);
 const cyclePriority = (p: Priority): Priority => (((p + 1) % 3) as Priority);
 
 function colorPaletteHtml(category: Category): string {
@@ -451,18 +456,22 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <ul class="manage-category-list">
             ${[...state!.categories]
               .sort((a, b) => a.order - b.order)
-              .map(
-                (c) => `
-              <li data-id="${c.id}">
+              .map((c) => {
+                // Échappé en défense en profondeur (voir itemRowHtml) : le
+                // serveur valide désormais le format des id, mais data-id
+                // n'échappe rien tout seul.
+                const id = escapeHtml(c.id);
+                return `
+              <li data-id="${id}">
                 <div class="cat-row" style="--cat-hue: ${resolveCategoryHue(c)}">
                   <button class="drag-handle category-manage-drag-handle" aria-label="Réordonner « ${escapeHtml(c.name)} »">${icons.gripVertical}</button>
-                  <button type="button" class="category-dot color-swatch-toggle" data-id="${c.id}" aria-label="Changer la couleur de « ${escapeHtml(c.name)} »" aria-expanded="${openPaletteFor === c.id}"></button>
-                  <span class="cat-name" data-id="${c.id}">${escapeHtml(c.name)}</span>
-                  <button class="icon-btn" data-action="del" data-id="${c.id}" aria-label="Supprimer">${icons.trash}</button>
+                  <button type="button" class="category-dot color-swatch-toggle" data-id="${id}" aria-label="Changer la couleur de « ${escapeHtml(c.name)} »" aria-expanded="${openPaletteFor === c.id}"></button>
+                  <span class="cat-name" data-id="${id}">${escapeHtml(c.name)}</span>
+                  <button class="icon-btn" data-action="del" data-id="${id}" aria-label="Supprimer">${icons.trash}</button>
                 </div>
                 ${openPaletteFor === c.id ? colorPaletteHtml(c) : ""}
-              </li>`,
-              )
+              </li>`;
+              })
               .join("")}
           </ul>
           <form id="new-category-form" class="row">
@@ -868,24 +877,28 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     }
 
     container.innerHTML = groups
-      .map(
-        (g) => `
-      <section class="category-section${g.id ? " has-color" : ""}" data-category-id="${g.id ?? ""}" ${g.id ? `style="--cat-hue: ${g.hue}"` : ""}>
+      .map((g) => {
+        // Échappé en défense en profondeur (voir itemRowHtml) : le serveur
+        // valide désormais le format des id, mais data-category-id/data-id
+        // n'échappent rien tout seuls.
+        const id = escapeHtml(g.id ?? "");
+        return `
+      <section class="category-section${g.id ? " has-color" : ""}" data-category-id="${id}" ${g.id ? `style="--cat-hue: ${g.hue}"` : ""}>
         ${
           g.showHeader
             ? `<header class="category-header">
                 ${g.id ? `<button class="drag-handle category-drag-handle" aria-label="Réordonner la catégorie">${icons.gripVertical}</button>` : `<span class="drag-handle-spacer"></span>`}
                 ${g.id ? `<span class="category-dot" aria-hidden="true"></span>` : ""}
-                <span class="category-name" data-id="${g.id ?? ""}">${escapeHtml(g.name)}</span>
+                <span class="category-name" data-id="${id}">${escapeHtml(g.name)}</span>
                 <span class="category-count">${g.items.filter((i) => !i.checked).length}</span>
               </header>`
             : ""
         }
-        <ul class="item-list" data-category-id="${g.id ?? ""}">
+        <ul class="item-list" data-category-id="${id}">
           ${g.items.map(itemRowHtml).join("")}
         </ul>
-      </section>`,
-      )
+      </section>`;
+      })
       .join("");
 
     container.querySelectorAll<HTMLInputElement>(".item-check").forEach((cb) => {
@@ -1017,16 +1030,21 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // au sein d'une même catégorie devient sans effet visuel dans ce mode
     // (l'ordre est alors recalculé à chaque rendu).
     const priority = priorityOf(item);
+    // Échappé même si le serveur valide désormais le format des id (voir
+    // worker/reducer.ts) : défense en profondeur pour une liste déjà
+    // persistée avant ce contrôle, ou tout autre bug futur qui le
+    // contournerait — data-id n'est pas un contexte qui échappe tout seul.
+    const id = escapeHtml(item.id);
     return `
-      <li class="item ${item.checked ? "checked" : ""}" data-id="${item.id}" data-priority="${priority}">
+      <li class="item ${item.checked ? "checked" : ""}" data-id="${id}" data-priority="${priority}">
         <div class="item-swipe-bg" aria-hidden="true">${icons.trash}</div>
         <div class="item-content">
           <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
-          <input type="checkbox" class="item-check" data-id="${item.id}" ${item.checked ? "checked" : ""} />
-          <button class="item-priority" data-action="cycle-priority" data-id="${item.id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)"></button>
-          <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${item.id}">${escapeHtml(item.quantity) || "+"}</span>
-          <span class="item-name" data-id="${item.id}">${escapeHtml(item.name)}</span>
-          <button class="icon-btn item-delete" data-action="delete-item" data-id="${item.id}" aria-label="Supprimer">${icons.trash}</button>
+          <input type="checkbox" class="item-check" data-id="${id}" ${item.checked ? "checked" : ""} />
+          <button class="item-priority" data-action="cycle-priority" data-id="${id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)"></button>
+          <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${id}">${escapeHtml(item.quantity) || "+"}</span>
+          <span class="item-name" data-id="${id}">${escapeHtml(item.name)}</span>
+          <button class="icon-btn item-delete" data-action="delete-item" data-id="${id}" aria-label="Supprimer">${icons.trash}</button>
         </div>
       </li>
     `;
@@ -1037,7 +1055,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // renderCategories) : plus facile à parcourir dans une liste déroulante
     // qu'à retenir un ordre personnalisé.
     const sorted = [...categories].sort((a, b) => alnumCompare(a.name, b.name));
-    const optionHtml = (c: Category) => `<option value="${c.id}" ${c.id === selectedId ? "selected" : ""}>${escapeHtml(c.name)}</option>`;
+    const optionHtml = (c: Category) => `<option value="${escapeHtml(c.id)}" ${c.id === selectedId ? "selected" : ""}>${escapeHtml(c.name)}</option>`;
     return [`<option value="" ${selectedId === null ? "selected" : ""}>Sans catégorie</option>`, sorted.map(optionHtml).join("")].join("");
   }
 

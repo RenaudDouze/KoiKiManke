@@ -620,18 +620,24 @@ test("masquer les articles cochés est optionnel et persiste après un rechargem
   await page.locator(".item", { has: page.locator(".item-name", { hasText: "Poires" }) }).locator(".item-check").check();
   await expect(page.locator(".item-name")).toHaveText(["Pommes", "Poires"]);
 
+  // "Poires" est cochée : elle apparaît normalement en suggestion.
+  await expect(page.locator("#quick-add .chip")).toHaveText(["+ Poires"]);
+
   const hideBtn = page.locator("#btn-hide-checked");
   await expect(hideBtn).toHaveAttribute("aria-pressed", "false");
   await hideBtn.click();
   await expect(hideBtn).toHaveAttribute("aria-pressed", "true");
 
   await expect(page.locator(".item-name")).toHaveText(["Pommes"]);
+  // Masquer les cochés masque aussi les suggestions, sans attendre de rechargement.
+  await expect(page.locator("#quick-add .chip")).toHaveCount(0);
 
   // La préférence (personnelle, par appareil) survit à un rechargement.
   await page.reload();
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
   await expect(page.locator(".item-name")).toHaveText(["Pommes"]);
   await expect(page.locator("#btn-hide-checked")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#quick-add .chip")).toHaveCount(0);
 
   // Cocher le dernier article visible le fait disparaître aussitôt, avec un
   // message dédié plutôt que le message générique de liste vide.
@@ -641,6 +647,8 @@ test("masquer les articles cochés est optionnel et persiste après un rechargem
   await page.locator("#btn-hide-checked").click();
   await expect(page.locator("#btn-hide-checked")).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator(".item-name")).toHaveText(["Pommes", "Poires"]);
+  // Les suggestions réapparaissent aussitôt qu'on réaffiche les cochés (triées alphabétiquement).
+  await expect(page.locator("#quick-add .chip")).toHaveText(["+ Poires", "+ Pommes"]);
 });
 
 test("glisser un article vers la gauche le supprime (mobile), avec annulation possible", async ({ page }) => {

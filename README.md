@@ -139,6 +139,7 @@ npm run lint          # oxlint
 npm run typecheck
 npm run test:coverage # Vitest — logique pure (shared/, worker/reducer.ts,
                        # worker/index.ts), 100% de couverture
+npm run test:mutation # Stryker — mutation testing sur le même périmètre
 npm run test:e2e      # Playwright, contre `vite dev`
 ```
 
@@ -148,8 +149,8 @@ sa logique métier vit dans `worker/reducer.ts`, entièrement testé ; le
 comportement de `listRoom.ts` lui-même est vérifié par les tests e2e contre
 une vraie instance `vite dev` (Worker + Durable Object réels via `workerd`).
 
-`.github/workflows/` : `ci.yml` (lint, typecheck, tests + couverture, e2e,
-audit, build) et `deploy.yml` (déploiement Cloudflare gaté sur la réussite
+`.github/workflows/` : `ci.yml` (lint, typecheck, tests + couverture,
+mutation testing, e2e, audit, build) et `deploy.yml` (déploiement Cloudflare gaté sur la réussite
 de la CI via `workflow_run`, jamais sur un simple push direct ; vérification
 post-déploiement ; tag `deploy-N` à chaque déploiement réussi pour pouvoir
 identifier/revenir à une version). Dependabot et CodeQL sont aussi

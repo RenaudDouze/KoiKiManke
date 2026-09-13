@@ -87,6 +87,24 @@ jobs:
       - run: npm ci
       - run: npm audit --audit-level=high
 
+  mutation-testing:
+    name: Mutation testing (logique pure)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mutation
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-report
+          path: mutation-report/
+          retention-days: 14
+
   build:
     name: Build de production
     needs: [lint, typecheck, unit-tests, e2e-tests]

@@ -44,18 +44,30 @@ Cloudflare (Workers + Durable Objects, sans base de données externe).
 
 ## Confidentialité
 
-Le seul contrôle d'accès à une liste est son code à 6 caractères : il n'y a
-ni compte ni mot de passe. Toute personne qui obtient le code peut voir et
-modifier la liste — un rappel affiché sur l'écran d'accueil et dans la liste
-le précise aux utilisateurs.
+Le seul contrôle d'accès à une liste est son code à 6 caractères (32^6, soit
+~1 milliard de combinaisons) : il n'y a ni compte ni mot de passe. Toute
+personne qui obtient le code peut voir et modifier la liste — un rappel
+affiché sur l'écran d'accueil et dans la liste le précise aux utilisateurs.
+Aucune limitation de débit n'est en place sur la création ou la lecture
+d'une liste par code : c'est un choix assumé pour rester un projet personnel
+simple à héberger, pas un compromis invisible.
 
 Les données de toute liste sont chiffrées au repos côté serveur (AES-GCM,
 clé dérivée du code de la liste — voir `worker/crypto.ts`) : ça protège
 contre un accès direct au stockage brut du Durable Object sans connaître le
 code, mais pas contre quelqu'un qui a déjà le code/lien de partage, qui peut
-ouvrir la liste normalement. Les listes créées avant l'introduction de ce
+ouvrir la liste normalement. À noter : la clé n'a pas plus d'entropie que le
+code lui-même (~30 bits) — ça protège d'une lecture accidentelle du
+stockage brut, pas d'un adversaire motivé qui l'obtiendrait et le
+casserait hors-ligne. Les listes créées avant l'introduction de ce
 chiffrement sont migrées automatiquement (sans étape manuelle) : elles sont
 stockées en clair jusqu'à leur prochaine écriture, qui les rechiffre.
+
+Les champs reçus du client (WebSocket ou fichier importé) sont revalidés
+côté serveur avant stockage/diffusion (`worker/reducer.ts`) : un identifiant,
+une priorité ou une couleur de catégorie mal formés sont corrigés ou ignorés
+plutôt que stockés tels quels, et les noms/quantités sont plafonnés en
+longueur.
 
 ## Stack technique
 

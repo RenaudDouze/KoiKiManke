@@ -2,11 +2,60 @@
 // Durable Object class (listRoom.ts) so it can be unit-tested without any
 // Workers runtime (storage, WebSockets, ctx...).
 
-import type { ListState, ClientMessage, Item, Category } from "../shared/types";
+import type { ListState, ClientMessage, Item, Category, Priority } from "../shared/types";
 import { parseFreeText } from "../shared/quantity";
 import { historyKey } from "../shared/historyKey";
 
 export const MAX_HISTORY = 300;
+
+// Les types de ClientMessage/Item/Category ne sont vérifiés qu'à la
+// compilation : rien ne garantit qu'un message reçu (JSON.parse d'une trame
+// WebSocket, ou données d'un fichier importé) les respecte réellement à
+// l'exécution — n'importe qui a le code de la liste peut en envoyer un
+// fabriqué à la main. Les champs ci-dessous finissent dans un attribut HTML
+// côté client sans échappement (data-id, data-priority, --cat-hue) : une
+// valeur non validée y casserait l'attribut et permettrait d'injecter du
+// HTML/JS arbitraire, exécuté chez tous les autres participants connectés.
+const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const MAX_NAME_LENGTH = 200;
+const MAX_QUANTITY_LENGTH = 40;
+const MAX_LIST_NAME_LENGTH = 100;
+
+function safeId(id: unknown): string {
+  return typeof id === "string" && SAFE_ID.test(id) ? id : crypto.randomUUID();
+}
+
+function isPriority(value: unknown): value is Priority {
+  return value === 0 || value === 1 || value === 2;
+}
+
+function isValidHue(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 360;
+}
+
+function safeString(value: unknown, maxLength: number): string {
+  return typeof value === "string" ? value.slice(0, maxLength) : "";
+}
+
+/** Revalide un item importé (fichier JSON fourni par l'utilisateur, jamais
+ * digne de confiance) sans changer sa forme pour les champs déjà valides —
+ * seuls id/name/quantity/priority sont corrigés si besoin. */
+function sanitizeImportedItem(item: Item): Item {
+  const safe: Item = { ...item };
+  if (!SAFE_ID.test(String(safe.id))) safe.id = crypto.randomUUID();
+  safe.name = safeString(safe.name, MAX_NAME_LENGTH);
+  safe.quantity = safeString(safe.quantity, MAX_QUANTITY_LENGTH);
+  if (safe.priority !== undefined && !isPriority(safe.priority)) delete safe.priority;
+  return safe;
+}
+
+function sanitizeImportedCategory(category: Category): Category {
+  const safe: Category = { ...category };
+  if (!SAFE_ID.test(String(safe.id))) safe.id = crypto.randomUUID();
+  safe.name = safeString(safe.name, MAX_NAME_LENGTH);
+  if (safe.color !== undefined && !isValidHue(safe.color)) delete safe.color;
+  return safe;
+}
 
 export function nextOrder(list: { order: number }[]): number {
   // Boucle plutôt que Math.max(...list.map(...)) : évite d'allouer un
@@ -57,7 +106,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
 
     case "renameList": {
       const name = msg.name.trim();
-      if (name) state.name = name;
+      if (name) state.name = name.slice(0, MAX_LIST_NAME_LENGTH);
       return;
     }
 
@@ -65,9 +114,9 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       const { name, quantity } = parseFreeText(msg.rawText);
       if (!name) return;
       const item: Item = {
-        id: msg.id,
-        name,
-        quantity,
+        id: safeId(msg.id),
+        name: name.slice(0, MAX_NAME_LENGTH),
+        quantity: quantity.slice(0, MAX_QUANTITY_LENGTH),
         categoryId: validCategoryId(state, msg.categoryId),
         checked: false,
         order: nextOrder(state.items),
@@ -82,10 +131,10 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
     case "updateItem": {
       const item = state.items.find((i) => i.id === msg.id);
       if (!item) return;
-      if (msg.name !== undefined) item.name = msg.name;
-      if (msg.quantity !== undefined) item.quantity = msg.quantity;
+      if (msg.name !== undefined) item.name = safeString(msg.name, MAX_NAME_LENGTH);
+      if (msg.quantity !== undefined) item.quantity = safeString(msg.quantity, MAX_QUANTITY_LENGTH);
       if (msg.categoryId !== undefined) item.categoryId = validCategoryId(state, msg.categoryId);
-      if (msg.priority !== undefined) item.priority = msg.priority;
+      if (msg.priority !== undefined && isPriority(msg.priority)) item.priority = msg.priority;
       item.updatedAt = now;
       return;
     }
@@ -125,7 +174,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
     case "addCategory": {
       const name = msg.name.trim();
       if (!name) return;
-      const category: Category = { id: msg.id, name, order: nextOrder(state.categories) };
+      const category: Category = { id: safeId(msg.id), name: name.slice(0, MAX_NAME_LENGTH), order: nextOrder(state.categories) };
       state.categories.push(category);
       return;
     }
@@ -134,7 +183,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       const category = state.categories.find((c) => c.id === msg.id);
       if (!category) return;
       const name = msg.name.trim();
-      if (name) category.name = name;
+      if (name) category.name = name.slice(0, MAX_NAME_LENGTH);
       return;
     }
 
@@ -163,22 +212,28 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       if (!category) return;
       if (msg.color === null) {
         delete category.color;
-      } else if (Number.isInteger(msg.color) && msg.color >= 0 && msg.color < 360) {
+      } else if (isValidHue(msg.color)) {
         category.color = msg.color;
       }
       return;
     }
 
     case "importState": {
+      // Le fichier importé n'est jamais digne de confiance (fourni par
+      // l'utilisateur, potentiellement partagé par quelqu'un d'autre) : ses
+      // items/catégories passent par la même revalidation qu'un message
+      // WebSocket forgé, avant d'être utilisés dans les deux modes ci-dessous.
+      const items = msg.data.items.map(sanitizeImportedItem);
+      const categories = msg.data.categories.map(sanitizeImportedCategory);
       if (msg.mode === "replace") {
-        state.items = msg.data.items;
-        state.categories = msg.data.categories;
+        state.items = items;
+        state.categories = categories;
         state.history = msg.data.history;
-        if (msg.data.name) state.name = msg.data.name;
+        if (msg.data.name) state.name = safeString(msg.data.name, MAX_LIST_NAME_LENGTH) || state.name;
       } else {
         const existingCategoryNames = new Map(state.categories.map((c) => [c.name.toLowerCase(), c.id]));
         const categoryIdMap = new Map<string, string | null>();
-        for (const category of msg.data.categories) {
+        for (const category of categories) {
           const existingId = existingCategoryNames.get(category.name.toLowerCase());
           if (existingId) {
             categoryIdMap.set(category.id, existingId);
@@ -190,7 +245,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
           }
         }
         const existingItemKeys = new Set(state.items.map((i) => historyKey(i.name)));
-        for (const item of msg.data.items) {
+        for (const item of items) {
           if (existingItemKeys.has(historyKey(item.name))) continue;
           const mappedCategory = item.categoryId ? (categoryIdMap.get(item.categoryId) ?? null) : null;
           state.items.push({

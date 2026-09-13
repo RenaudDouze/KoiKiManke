@@ -168,6 +168,19 @@ describe("applyMessage", () => {
       expect(state.items).toEqual([]);
       expect(state.history).toEqual([]);
     });
+
+    it("remplace un id qui casserait un attribut HTML (data-id non échappé côté client) par un id sûr", () => {
+      const state = makeState();
+      applyMessage(state, { type: "addItem", id: '1" onmouseover="alert(1)', rawText: "Pommes", categoryId: null }, NOW);
+      expect(state.items[0].id).not.toContain('"');
+      expect(state.items[0].id).toMatch(/^[A-Za-z0-9_-]+$/);
+    });
+
+    it("tronque un nom anormalement long", () => {
+      const state = makeState();
+      applyMessage(state, { type: "addItem", id: "i1", rawText: "a".repeat(500), categoryId: null }, NOW);
+      expect(state.items[0].name.length).toBeLessThanOrEqual(200);
+    });
   });
 
   describe("updateItem", () => {
@@ -219,6 +232,29 @@ describe("applyMessage", () => {
       const state = withItem();
       applyMessage(state, { type: "updateItem", id: "i1", categoryId: "ghost" }, NOW);
       expect(state.items[0].categoryId).toBeNull();
+    });
+
+    it("ignore une priorité qui n'est pas 0, 1 ou 2 (ex: message WebSocket forgé), plutôt que de la stocker telle quelle", () => {
+      const state = withItem();
+      // priority est typé Priority (0|1|2) mais rien ne le garantit à
+      // l'exécution pour un message reçu — cast pour simuler un message
+      // forgé à la main (data-priority="${priority}" n'est pas échappé
+      // côté client : une chaîne avec un guillemet y casserait l'attribut).
+      applyMessage(state, { type: "updateItem", id: "i1", priority: '0" onmouseover="alert(1)' as unknown as 0 }, NOW);
+      expect(state.items[0].priority).toBeUndefined();
+    });
+
+    it("tronque un nom ou une quantité anormalement longs", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", name: "a".repeat(500), quantity: "b".repeat(100) }, NOW);
+      expect(state.items[0].name.length).toBeLessThanOrEqual(200);
+      expect(state.items[0].quantity.length).toBeLessThanOrEqual(40);
+    });
+
+    it("vide le champ plutôt que de stocker une valeur d'un autre type (ex: nombre au lieu d'une chaîne)", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", name: 12345 as unknown as string }, NOW);
+      expect(state.items[0].name).toBe("");
     });
   });
 
@@ -306,6 +342,13 @@ describe("applyMessage", () => {
       applyMessage(state, { type: "addCategory", id: "c1", name: "Fruits" }, NOW);
       applyMessage(state, { type: "addCategory", id: "c2", name: "  " }, NOW);
       expect(state.categories).toEqual([{ id: "c1", name: "Fruits", order: 0 }]);
+    });
+
+    it("remplace un id de catégorie qui casserait un attribut HTML par un id sûr", () => {
+      const state = makeState();
+      applyMessage(state, { type: "addCategory", id: '1" onmouseover="alert(1)', name: "Fruits" }, NOW);
+      expect(state.categories[0].id).not.toContain('"');
+      expect(state.categories[0].id).toMatch(/^[A-Za-z0-9_-]+$/);
     });
 
     it("renameCategory renomme, ignore id inconnu et nom blanc", () => {
@@ -406,6 +449,53 @@ describe("applyMessage", () => {
       expect(state.history).toEqual(data.history);
     });
 
+    it("mode replace revalide les items/catégories importés (id, priorité, couleur) au lieu de leur faire confiance", () => {
+      // Un fichier d'export/import est fourni par l'utilisateur (potentiellement
+      // partagé par quelqu'un d'autre) : un id ou une priorité invalides y
+      // finiraient dans un attribut HTML non échappé côté client.
+      const state = makeState();
+      applyMessage(
+        state,
+        {
+          type: "importState",
+          mode: "replace",
+          data: {
+            name: "",
+            items: [
+              {
+                id: '1" onmouseover="alert(1)',
+                name: "Pommes",
+                quantity: "",
+                categoryId: null,
+                checked: false,
+                order: 0,
+                priority: "haute" as unknown as 2,
+                createdAt: 0,
+                updatedAt: 0,
+              },
+            ],
+            categories: [{ id: '2" onmouseover="alert(2)', name: "Fruits", order: 0, color: "rouge" as unknown as number }],
+            history: [],
+          },
+        },
+        NOW,
+      );
+      expect(state.items[0].id).not.toContain('"');
+      expect(state.items[0].priority).toBeUndefined();
+      expect(state.categories[0].id).not.toContain('"');
+      expect(state.categories[0].color).toBeUndefined();
+    });
+
+    it("mode replace conserve le nom actuel si data.name n'est pas une chaîne (ex: nombre)", () => {
+      const state = makeState({ name: "Ancienne" });
+      applyMessage(
+        state,
+        { type: "importState", mode: "replace", data: { name: 12345 as unknown as string, items: [], categories: [], history: [] } },
+        NOW,
+      );
+      expect(state.name).toBe("Ancienne");
+    });
+
     it("mode replace conserve le nom actuel si data.name est vide", () => {
       const state = makeState({ name: "Ancienne" });
       applyMessage(
@@ -480,6 +570,39 @@ describe("applyMessage", () => {
       const fruitsCategory = state.categories.find((c) => c.name === "Fruits")!;
       expect(fruitsCategory).toBeDefined();
       expect(pommes.categoryId).toBe(fruitsCategory.id);
+    });
+
+    it("mode merge revalide aussi les items/catégories importés (id, priorité)", () => {
+      const state = makeState();
+      applyMessage(
+        state,
+        {
+          type: "importState",
+          mode: "merge",
+          data: {
+            name: "",
+            items: [
+              {
+                id: '1" onmouseover="alert(1)',
+                name: "Pommes",
+                quantity: "",
+                categoryId: null,
+                checked: false,
+                order: 0,
+                priority: "haute" as unknown as 2,
+                createdAt: 0,
+                updatedAt: 0,
+              },
+            ],
+            categories: [],
+            history: [],
+          },
+        },
+        NOW,
+      );
+      const pommes = state.items.find((i) => i.name === "Pommes")!;
+      expect(pommes.id).not.toContain('"');
+      expect(pommes.priority).toBeUndefined();
     });
 
     it("mode merge laisse categoryId à null si l'article importé n'en a pas, ou si la catégorie importée est introuvable", () => {

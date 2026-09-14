@@ -21,6 +21,7 @@ test("parcours complet : créer, ajouter avec quantité, catégoriser, cocher, p
   await page.fill("#add-input", "Lait");
   await page.click(".add-submit");
   await expect(page.locator(".item")).toHaveCount(2);
+  await expect(page.locator("#item-counter")).toHaveText("0/2");
 
   // Catégories : création, puis assignation via le sélecteur du formulaire.
   await page.click("#btn-menu");
@@ -38,6 +39,7 @@ test("parcours complet : créer, ajouter avec quantité, catégoriser, cocher, p
   // Cocher un article le fait basculer visuellement
   await page.locator(".item", { has: page.locator(".item-name", { hasText: "Lait" }) }).locator(".item-check").check();
   await expect(page.locator(".item.checked .item-name", { hasText: "Lait" })).toBeVisible();
+  await expect(page.locator("#item-counter")).toHaveText("1/3");
 
   // Partage : code affiché + QR code généré, export/import accessibles
   // depuis la même modale (menu ⋮ → Partager).

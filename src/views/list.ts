@@ -215,7 +215,20 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     }
     renderCategories();
     renderQuickAdd();
+    updateItemCounter();
     checkCelebration();
+  }
+
+  function updateItemCounter(): void {
+    const el = root.querySelector("#item-counter");
+    if (!el || !state) return;
+    const total = state.items.length;
+    if (total === 0) {
+      el.textContent = "";
+      return;
+    }
+    const checked = state.items.filter((i) => i.checked).length;
+    el.textContent = `${checked}/${total}`;
   }
 
   function checkCelebration(): void {
@@ -1070,6 +1083,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         <header class="list-header">
           <button class="icon-btn" id="btn-home" aria-label="Accueil">${icons.back}</button>
           <h1 class="list-title" id="list-title">${escapeHtml(s.name)}</h1>
+          <span class="item-counter" id="item-counter" aria-live="polite"></span>
           <span class="lock-badge" title="Données chiffrées sur le serveur" aria-label="Données chiffrées sur le serveur">${icons.lock}</span>
           <span class="conn-dot ${isConnected ? "online" : ""}" id="conn-dot" title="${isConnected ? "Synchronisé" : "Connexion…"}"></span>
           <button class="icon-btn presence-btn" id="btn-presence" aria-label="Personnes connectées">

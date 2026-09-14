@@ -434,15 +434,33 @@ button:focus-visible {
 }
 
 .conn-dot {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: #c9a227;
+  /* Halo pour rendre la couleur du statut perceptible sans avoir à fixer le
+     point des yeux — un simple disque de 9-10px se perd trop facilement
+     dans l'en-tête. */
+  box-shadow: 0 0 0 3px color-mix(in srgb, #c9a227 22%, transparent);
   flex-shrink: 0;
 }
 
 .conn-dot.online {
   background: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+/* Même logique que les autres agrandissements ciblés du mode accessibilité
+   ci-dessus (.list-title, .add-input-wrap...) : le point ne grossit pas
+   avec la police puisqu'il n'est pas exprimé en em/rem. */
+:root[data-a11y="on"] .conn-dot {
+  width: 14px;
+  height: 14px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, #c9a227 30%, transparent);
+}
+
+:root[data-a11y="on"] .conn-dot.online {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
 .menu-panel {

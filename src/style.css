@@ -418,6 +418,13 @@ button:focus-visible {
   background: var(--checked-bg);
 }
 
+.item-counter {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
 .lock-badge {
   display: inline-flex;
   align-items: center;

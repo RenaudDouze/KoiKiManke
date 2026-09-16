@@ -7,8 +7,7 @@ test("toute liste créée est chiffrée côté serveur, sans rien changer à l'u
   await page.waitForURL(/\/l\//);
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
 
-  // Le badge cadenas et la note de confidentialité confirment le chiffrement.
-  await expect(page.locator(".lock-badge")).toBeVisible();
+  // La note de confidentialité confirme le chiffrement.
   await expect(page.locator(".list-privacy-note")).toContainText("chiffrées");
 
   // Utilisation normale : ajouter, cocher fonctionnent malgré le chiffrement
@@ -26,7 +25,6 @@ test("toute liste créée est chiffrée côté serveur, sans rien changer à l'u
   // prouve que la liste déchiffrée reste fidèle à ce qui a été écrit.
   await page.reload();
   await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
-  await expect(page.locator(".lock-badge")).toBeVisible();
   await expect(page.locator(".item")).toHaveCount(2);
   await expect(page.locator(".item.checked .item-name", { hasText: "Lait" })).toBeVisible();
 });

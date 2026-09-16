@@ -425,14 +425,6 @@ button:focus-visible {
   flex-shrink: 0;
 }
 
-.lock-badge {
-  display: inline-flex;
-  align-items: center;
-  color: var(--text-muted);
-  font-size: 0.95rem;
-  flex-shrink: 0;
-}
-
 .conn-dot {
   width: 10px;
   height: 10px;

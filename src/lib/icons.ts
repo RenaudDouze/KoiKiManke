@@ -52,7 +52,6 @@ export const icons = {
   checkCircle: svg('<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>'),
   download: svg('<path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M4 21h16"/>'),
   upload: svg('<path d="M12 20V7"/><path d="m7 12 5-5 5 5"/><path d="M4 21h16"/>'),
-  lock: svg('<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
   accessibility: svg('<circle cx="12" cy="4" r="2"/><path d="M12 8v5"/><path d="M6 10h12"/><path d="M12 13l-4 8"/><path d="M12 13l4 8"/>'),
 } as const;
 

@@ -1084,7 +1084,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <button class="icon-btn" id="btn-home" aria-label="Accueil">${icons.back}</button>
           <h1 class="list-title" id="list-title">${escapeHtml(s.name)}</h1>
           <span class="item-counter" id="item-counter" aria-live="polite"></span>
-          <span class="lock-badge" title="Données chiffrées sur le serveur" aria-label="Données chiffrées sur le serveur">${icons.lock}</span>
           <span class="conn-dot ${isConnected ? "online" : ""}" id="conn-dot" title="${isConnected ? "Synchronisé" : "Connexion…"}"></span>
           <button class="icon-btn presence-btn" id="btn-presence" aria-label="Personnes connectées">
             ${icons.users}<span class="presence-count" id="presence-count">1</span>

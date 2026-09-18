@@ -38,8 +38,10 @@ export function openShareModal(code: string, listName: string, actions: ShareMod
   // Chargé à la demande : la lib qrcode ne sert qu'à l'ouverture de ce
   // modal, inutile de l'embarquer dans le chunk principal pour tout le monde.
   import("./qr").then(({ renderQrSvg }) => renderQrSvg(url)).then((svg) => {
-    const wrap = overlay.querySelector("#qr-wrap");
-    if (wrap) wrap.innerHTML = svg;
+    // #qr-wrap est dans le gabarit statique ci-dessus : toujours trouvé,
+    // que la modale soit encore affichée ou déjà détachée du document (le
+    // sous-arbre de overlay reste interrogeable dans les deux cas).
+    (overlay.querySelector("#qr-wrap") as HTMLElement).innerHTML = svg;
   });
 
   const modal = overlay.querySelector(".modal") as HTMLElement;
@@ -100,8 +102,9 @@ async function copyText(text: string): Promise<void> {
 }
 
 function flash(root: HTMLElement, selector: string, text: string): void {
-  const el = root.querySelector(selector) as HTMLElement | null;
-  if (!el) return;
+  // Toujours appelée avec "#copy-link"/"#copy-code", tous deux dans le
+  // gabarit statique : selector est donc toujours trouvé.
+  const el = root.querySelector(selector) as HTMLElement;
   const original = el.textContent;
   el.textContent = text;
   setTimeout(() => {

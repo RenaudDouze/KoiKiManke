@@ -22,6 +22,8 @@ export default defineConfig({
       include: [
         "shared/**/*.ts",
         "worker/**/*.ts",
+        "src/main.ts",
+        "src/views/home.ts",
         "src/lib/color.ts",
         "src/lib/sort.ts",
         "src/lib/id.ts",

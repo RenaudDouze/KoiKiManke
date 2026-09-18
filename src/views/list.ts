@@ -953,6 +953,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       });
     });
 
+    container.querySelectorAll<HTMLSelectElement>(".item-category").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        conn.send({ type: "updateItem", id: sel.dataset.id!, categoryId: sel.value || null });
+      });
+    });
+
     container.querySelectorAll<HTMLElement>(".item-name").forEach((el) => {
       el.addEventListener("click", () => {
         const item = state!.items.find((i) => i.id === el.dataset.id);
@@ -1043,10 +1049,13 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
   function itemRowHtml(item: Item): string {
     // La poignée reste utile même en tri alphabétique : elle permet de
-    // déplacer un article vers une autre catégorie (le seul autre moyen
-    // étant de le supprimer puis de le rajouter). Seul le repositionnement
-    // au sein d'une même catégorie devient sans effet visuel dans ce mode
-    // (l'ordre est alors recalculé à chaque rendu).
+    // déplacer un article vers une autre catégorie déjà affichée dans la
+    // liste par glisser-déposer. Le sélecteur .item-category ci-dessous
+    // couvre le cas d'une catégorie vide (pas de section affichée, donc pas
+    // de cible de dépôt) : les deux moyens coexistent. Seul le
+    // repositionnement au sein d'une même catégorie devient sans effet
+    // visuel en tri alphabétique (l'ordre est alors recalculé à chaque
+    // rendu).
     const priority = priorityOf(item);
     // Échappé même si le serveur valide désormais le format des id (voir
     // worker/reducer.ts) : défense en profondeur pour une liste déjà
@@ -1062,6 +1071,12 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <button class="item-priority" data-action="cycle-priority" data-id="${id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)"></button>
           <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${id}">${escapeHtml(item.quantity) || "+"}</span>
           <span class="item-name" data-id="${id}">${escapeHtml(item.name)}</span>
+          <span class="item-category-picker">
+            <span class="icon-btn item-category-icon" aria-hidden="true">${icons.tag}</span>
+            <select class="item-category" data-id="${id}" aria-label="Changer la catégorie de « ${escapeHtml(item.name)} »">
+              ${categoryOptionsHtml(state!.categories, item.categoryId)}
+            </select>
+          </span>
           <button class="icon-btn item-delete" data-action="delete-item" data-id="${id}" aria-label="Supprimer">${icons.trash}</button>
         </div>
       </li>

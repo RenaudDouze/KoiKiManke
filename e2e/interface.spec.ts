@@ -293,6 +293,38 @@ test("une catégorie sans article dans la liste reste gérable mais ne s'affiche
   await expect(page.locator(".cat-name", { hasText: "Papeterie" })).toHaveCount(1);
 });
 
+test("changer la catégorie d'un article déjà ajouté, même vers une catégorie sans article affiché", async ({ page }) => {
+  await page.goto("/");
+  await page.click("#create-form button[type=submit]");
+  await page.waitForURL(/\/l\//);
+  await expect(page.locator(".conn-dot")).toHaveClass(/online/, { timeout: 10_000 });
+
+  await page.click("#btn-menu");
+  await page.click('[data-action="manage-categories"]');
+  await page.fill("#new-category-name", "Bricolage");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li", { hasText: "Bricolage" })).toHaveCount(1);
+  await page.fill("#new-category-name", "Papeterie");
+  await page.click("#new-category-form button[type=submit]");
+  await expect(page.locator(".manage-category-list li", { hasText: "Papeterie" })).toHaveCount(1);
+  await page.keyboard.press("Escape");
+
+  await page.selectOption("#add-category", { label: "Bricolage" });
+  await page.fill("#add-input", "Pommes");
+  await page.click(".add-submit");
+
+  // "Papeterie" est vide : pas de section, donc pas de cible de
+  // glisser-déposer — seul le sélecteur natif de la ligne permet d'y
+  // déplacer l'article.
+  await expect(page.locator(".category-section")).toHaveCount(1);
+  const itemRow = page.locator(".item", { has: page.locator(".item-name", { hasText: "Pommes" }) });
+  await itemRow.locator(".item-category").selectOption({ label: "Papeterie" });
+
+  await expect(page.locator(".category-name")).toHaveText(["Papeterie"]);
+  await expect(page.locator(".category-section")).toHaveCount(1);
+  await expect(page.locator(".item-name", { hasText: "Pommes" })).toBeVisible();
+});
+
 test("l'ordre manuel des catégories s'affiche dans la liste mais pas dans le menu déroulant", async ({ page }) => {
   await page.goto("/");
   await page.click("#create-form button[type=submit]");

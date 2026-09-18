@@ -15,13 +15,24 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "lcov"],
-      // Only the pure-logic subset of src/ is unit-tested here (same
-      // philosophy as worker/listRoom.ts below): DOM-heavy view/component
-      // code (src/views, src/components, and the DOM/storage/network glue
-      // in src/lib) is exercised by the Playwright e2e suite instead, not
-      // listed here to keep the coverage threshold meaningful rather than
-      // diluted by files that were never meant to be unit-tested.
-      include: ["shared/**/*.ts", "worker/**/*.ts", "src/lib/color.ts", "src/lib/sort.ts"],
+      // src/ est couvert au fur et à mesure (fichier par fichier, en PR
+      // séparées) plutôt qu'en un seul glob src/**/*.ts : chaque nouveau
+      // fichier n'est ajouté ici qu'une fois ses tests écrits, pour ne
+      // jamais faire passer le seuil 100% sous zéro entre deux PR.
+      include: [
+        "shared/**/*.ts",
+        "worker/**/*.ts",
+        "src/lib/color.ts",
+        "src/lib/sort.ts",
+        "src/lib/id.ts",
+        "src/lib/dom.ts",
+        "src/lib/privacyHint.ts",
+        "src/lib/syncWorker.ts",
+        "src/lib/basePath.ts",
+        "src/lib/http.ts",
+        "src/lib/icons.ts",
+        "src/components/qr.ts",
+      ],
       exclude: [
         "**/*.test.ts",
         "worker/test/**",

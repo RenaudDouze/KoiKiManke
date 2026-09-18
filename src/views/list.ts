@@ -169,7 +169,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     for (const item of next.items) {
       if (previousIds.has(item.id)) continue;
       if (pendingLocalItemIds.delete(item.id)) continue;
-      notifyItemAdded(item.name, item.quantity, next.name);
+      void notifyItemAdded(item.name, item.quantity, next.name);
     }
   }
 

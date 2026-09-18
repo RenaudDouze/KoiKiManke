@@ -67,22 +67,28 @@ export async function toggleNotifications(): Promise<NotificationStatus> {
   return getNotificationStatus();
 }
 
-function isPageActive(): boolean {
-  try {
-    return document.visibilityState === "visible" && document.hasFocus();
-  } catch {
-    return false;
-  }
-}
-
-// N'affiche rien si l'onglet est déjà au premier plan : l'article apparaît
-// alors déjà en direct dans la liste (synchronisation temps réel normale,
-// voir list.ts) — une notification système serait redondante et intrusive.
-export function notifyItemAdded(itemName: string, quantity: string, listName: string): void {
+// Toujours notifiée, même onglet/appli au premier plan : l'utilisateur l'a
+// explicitement demandé (l'article apparaît de toute façon déjà en direct
+// dans la liste, mais la notification système reste voulue en plus).
+export async function notifyItemAdded(itemName: string, quantity: string, listName: string): Promise<void> {
   if (getNotificationStatus() !== "on") return;
-  if (isPageActive()) return;
+  const title = listName;
+  const options = { body: quantity ? `${itemName} (${quantity})` : itemName, tag: "nldc-new-item" };
   try {
-    new Notification(listName, { body: quantity ? `${itemName} (${quantity})` : itemName, tag: "nldc-new-item" });
+    // Une fois l'app installée (PWA) avec un service worker actif, Chrome
+    // sur Android (et d'autres navigateurs mobiles) refuse le constructeur
+    // Notification direct ("Illegal constructor: use
+    // ServiceWorkerRegistration.showNotification() instead") — seule cette
+    // API fonctionne alors de façon fiable. En dev (`vite dev`, y compris
+    // sous Playwright), aucun service worker n'est enregistré
+    // (devOptions.enabled par défaut à false dans vite.config.ts), donc ce
+    // repli sur le constructeur direct reste la voie normale des tests e2e.
+    const registration = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
+    if (registration) {
+      await registration.showNotification(title, options);
+    } else {
+      new Notification(title, options);
+    }
   } catch {
     // Permission révoquée entre-temps, contexte non sécurisé (http non
     // local)... ne doit jamais faire échouer la synchronisation temps réel.

@@ -42,7 +42,9 @@ export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): 
   }
 
   function onPointerMove(e: PointerEvent) {
-    if (!dragEl) return;
+    // Écouteur document ajouté par onPointerDown juste après avoir affecté
+    // dragEl, et retiré par onPointerUp en tout premier : ne peut donc se
+    // déclencher que pendant un glisser actif (dragEl non nul).
     e.preventDefault();
     pendingX = e.clientX;
     pendingY = e.clientY;
@@ -83,12 +85,13 @@ export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): 
       rafId = null;
       processPendingMove();
     }
-    const el = dragEl;
+    // onPointerUp ne peut s'exécuter que via les écouteurs posés par
+    // onPointerDown juste après avoir affecté dragEl, et il les retire lui-
+    // même en tout premier (ci-dessus) : dragEl est donc garanti non nul ici.
+    const el = dragEl!;
     dragEl = null;
-    if (el) {
-      el.classList.remove("dragging");
-      opts.onDrop(el);
-    }
+    el.classList.remove("dragging");
+    opts.onDrop(el);
   }
 
   root.addEventListener("pointerdown", onPointerDown);

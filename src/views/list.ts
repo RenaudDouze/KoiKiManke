@@ -22,6 +22,7 @@ import { getHideCheckedPreference, toggleHideCheckedPreference } from "../lib/hi
 import { getDeviceName } from "../lib/presence";
 import { historyKey } from "../../shared/historyKey";
 import { PRIVACY_HINT } from "../lib/privacyHint";
+import { getNotificationStatus, notificationStatusLabel, notifyItemAdded, toggleNotifications } from "../lib/notifications";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
@@ -79,6 +80,11 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   // null = pas encore évalué (évite de célébrer à l'ouverture d'une liste
   // déjà entièrement cochée) ; sinon, reflète l'état à la dernière vérification.
   let wasFullyChecked: boolean | null = null;
+  // Id des articles qu'on vient d'ajouter/restaurer soi-même (addItem,
+  // restoreItems) : le serveur rediffuse l'état entier à tout le monde, y
+  // compris à son propre auteur, donc sans ça notifyRemoteAdditions (voir
+  // onStateUpdate) nous notifierait nos propres ajouts.
+  const pendingLocalItemIds = new Set<string>();
   const conn = new ListConnection(code, getDeviceName());
 
   const UNDO_TIMEOUT_MS = 5000;
@@ -141,12 +147,30 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function onStateUpdate(next: ListState) {
+    const previous = state;
     state = next;
     loading = false;
     notFound = false;
     cacheListState(next);
     touchRecentList(next.code, next.name);
+    notifyRemoteAdditions(previous, next);
     render();
+  }
+
+  // Compare l'état précédent au nouveau plutôt que d'écouter un message
+  // particulier : le serveur ne rediffuse jamais autre chose qu'un état
+  // complet (voir CLAUDE.md, protocole de synchronisation), il n'y a pas de
+  // message "addItem" à observer côté client une fois confirmé.
+  function notifyRemoteAdditions(previous: ListState | null, next: ListState): void {
+    // Pas de base de comparaison : première connexion (état initial), pas
+    // un ajout en direct — ne pas notifier tout l'historique existant.
+    if (!previous) return;
+    const previousIds = new Set(previous.items.map((i) => i.id));
+    for (const item of next.items) {
+      if (previousIds.has(item.id)) continue;
+      if (pendingLocalItemIds.delete(item.id)) continue;
+      notifyItemAdded(item.name, item.quantity, next.name);
+    }
   }
 
   conn.onState(onStateUpdate);
@@ -383,6 +407,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       updateItemSortMenuItem(e.currentTarget as HTMLElement);
       renderCategories();
     });
+    panel?.querySelector('[data-action="notifications"]')?.addEventListener("click", (e) => {
+      // e.currentTarget devient null une fois l'événement terminé : on le
+      // capture avant l'attente de toggleNotifications() (permission
+      // navigateur potentiellement asynchrone).
+      const button = e.currentTarget as HTMLElement;
+      toggleNotifications().then((status) => {
+        updateNotificationsMenuItem(button);
+        if (status === "denied") showToast("Notifications bloquées : autorise-les dans les réglages du navigateur pour ce site.");
+        else if (status === "unsupported") showToast("Notifications indisponibles sur ce navigateur.");
+      });
+    });
     panel?.querySelector('[data-action="manage-categories"]')?.addEventListener("click", openCategoryManager);
     panel?.querySelector('[data-action="manage-suggestions"]')?.addEventListener("click", openSuggestionManager);
     const clearCheckedBtn = panel?.querySelector<HTMLButtonElement>('[data-action="clear-checked"]');
@@ -395,7 +430,10 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           const checkedItems = state?.items.filter((i) => i.checked) ?? [];
           if (checkedItems.length === 0) return;
           conn.send({ type: "clearChecked" });
-          pushUndo(`${checkedItems.length} article(s) coché(s) vidé(s)`, () => conn.send({ type: "restoreItems", items: checkedItems }));
+          pushUndo(`${checkedItems.length} article(s) coché(s) vidé(s)`, () => {
+            for (const item of checkedItems) pendingLocalItemIds.add(item.id);
+            conn.send({ type: "restoreItems", items: checkedItems });
+          });
           if (panel) panel.hidden = true;
         },
       });
@@ -754,7 +792,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       const rawText = input.value.trim();
       if (!rawText) return;
       const categoryId = categorySelect?.value || null;
-      conn.send({ type: "addItem", id: uid(), rawText, categoryId });
+      const id = uid();
+      pendingLocalItemIds.add(id);
+      conn.send({ type: "addItem", id, rawText, categoryId });
       input.value = "";
       if (preview) preview.hidden = true;
       if (suggestionsEl) suggestionsEl.hidden = true;
@@ -823,7 +863,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function addFromHistory(entry: HistoryEntry): void {
-    conn.send({ type: "addItem", id: uid(), rawText: entry.label, categoryId: entry.categoryId });
+    const id = uid();
+    pendingLocalItemIds.add(id);
+    conn.send({ type: "addItem", id, rawText: entry.label, categoryId: entry.categoryId });
   }
 
   function renderCategories(): void {
@@ -948,7 +990,10 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         armedLabel: `Confirmer la suppression de « ${item.name} »`,
         onConfirm: () => {
           conn.send({ type: "deleteItem", id: item.id });
-          pushUndo(`« ${item.name} » supprimé`, () => conn.send({ type: "restoreItems", items: [item] }));
+          pushUndo(`« ${item.name} » supprimé`, () => {
+            pendingLocalItemIds.add(item.id);
+            conn.send({ type: "restoreItems", items: [item] });
+          });
         },
       });
     });
@@ -1042,7 +1087,10 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         const item = state!.items.find((i) => i.id === el.dataset.id);
         if (!item) return;
         conn.send({ type: "deleteItem", id: item.id });
-        pushUndo(`« ${item.name} » supprimé`, () => conn.send({ type: "restoreItems", items: [item] }));
+        pushUndo(`« ${item.name} » supprimé`, () => {
+          pendingLocalItemIds.add(item.id);
+          conn.send({ type: "restoreItems", items: [item] });
+        });
       },
     });
   }
@@ -1112,6 +1160,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
             <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
             <button type="button" data-action="accessibility">${accessibilityMenuHtml(getAccessibilityPreference())}</button>
             <button type="button" data-action="item-sort">${itemSortMenuHtml(getItemSortPreference())}</button>
+            <button type="button" data-action="notifications">${notificationsMenuHtml(getNotificationStatus())}</button>
             <button type="button" data-action="manage-categories"><span class="menu-item-icon">${icons.tag}</span>Gérer les catégories</button>
             <button type="button" data-action="manage-suggestions"><span class="menu-item-icon">${icons.history}</span>Gérer les suggestions</button>
             <button type="button" data-action="clear-checked"><span class="menu-item-icon">${icons.checkCircle}</span><span class="menu-item-label">Vider les articles cochés</span></button>
@@ -1169,6 +1218,14 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
 
   function updateItemSortMenuItem(button: HTMLElement): void {
     button.innerHTML = itemSortMenuHtml(getItemSortPreference());
+  }
+
+  function notificationsMenuHtml(status: ReturnType<typeof getNotificationStatus>): string {
+    return `<span class="menu-item-icon">${icons.bell}</span>Notifications : ${notificationStatusLabel(status)}`;
+  }
+
+  function updateNotificationsMenuItem(button: HTMLElement): void {
+    button.innerHTML = notificationsMenuHtml(getNotificationStatus());
   }
 
   function hideCheckedButtonHtml(hide: boolean): string {

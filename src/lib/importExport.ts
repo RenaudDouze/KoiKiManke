@@ -45,11 +45,13 @@ export async function parseImportFile(file: File): Promise<ImportPayload> {
   ) {
     throw new Error("Ce fichier ne ressemble pas à un export de liste de courses.");
   }
-  const parsed = data as Partial<ImportPayload>;
+  // items/categories sont garantis tableaux par la validation ci-dessus :
+  // pas besoin d'un repli supplémentaire pour ces deux champs.
+  const parsed = data as Pick<ImportPayload, "items" | "categories"> & Partial<ImportPayload>;
   return {
     name: typeof parsed.name === "string" ? parsed.name : "",
-    items: parsed.items ?? [],
-    categories: parsed.categories ?? [],
+    items: parsed.items,
+    categories: parsed.categories,
     history: Array.isArray(parsed.history) ? parsed.history : [],
   };
 }

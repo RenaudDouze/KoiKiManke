@@ -139,7 +139,8 @@ npm run lint          # oxlint
 npm run typecheck
 npm run test:coverage # Vitest — tout le dépôt (shared/, worker/, src/),
                        # 100% de couverture
-npm run test:mutation # Stryker — mutation testing sur le même périmètre
+npm run test:mutation # Stryker — mutation testing sur la seule logique pure
+                       # (shared/, worker/, color.ts/sort.ts)
 npm run test:e2e      # Playwright, contre `vite dev`
 ```
 

@@ -17,7 +17,7 @@ import { trapFocus } from "../lib/focusTrap";
 import { resolveCategoryHue } from "../lib/color";
 import { alnumCompare } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
-import { toggleAccessibilityPreference, getAccessibilityPreference, accessibilityLabel } from "../lib/accessibility";
+import { toggleAccessibilityPreference, getAccessibilityPreference, accessibilityLabel } from "../lib/accessibilityPreference";
 import { cycleItemSortPreference, getItemSortPreference, itemSortLabel } from "../lib/itemSortPreference";
 import { getHideCheckedPreference, toggleHideCheckedPreference } from "../lib/hideCheckedPreference";
 import { getDeviceName } from "../lib/presence";

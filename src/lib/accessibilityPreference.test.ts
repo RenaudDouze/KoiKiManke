@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { accessibilityLabel, applyAccessibility, getAccessibilityPreference, setAccessibilityPreference, toggleAccessibilityPreference } from "./accessibility";
+import { accessibilityLabel, applyAccessibilityPreference, getAccessibilityPreference, setAccessibilityPreference, toggleAccessibilityPreference } from "./accessibilityPreference";
 
 describe("accessibility", () => {
   beforeEach(() => {
@@ -32,15 +32,15 @@ describe("accessibility", () => {
     });
   });
 
-  describe("applyAccessibility", () => {
+  describe("applyAccessibilityPreference", () => {
     it("retire l'attribut data-a11y pour \"off\"", () => {
       document.documentElement.setAttribute("data-a11y", "on");
-      applyAccessibility("off");
+      applyAccessibilityPreference("off");
       expect(document.documentElement.hasAttribute("data-a11y")).toBe(false);
     });
 
     it("pose data-a11y pour \"on\"", () => {
-      applyAccessibility("on");
+      applyAccessibilityPreference("on");
       expect(document.documentElement.getAttribute("data-a11y")).toBe("on");
     });
   });

@@ -25,23 +25,27 @@ export default {
   htmlReporter: {
     fileName: "mutation-report/index.html",
   },
-  // Same "pure logic" scope as vitest.config.ts's 100% coverage threshold
-  // (see CLAUDE.md) — DOM-heavy view/component code is exercised by the
-  // Playwright e2e suite instead, not meaningfully mutation-testable here.
+  // Même périmètre que la couverture 100% de vitest.config.ts (voir
+  // CLAUDE.md) : shared/ + worker/ + tout src/ (y compris les vues/
+  // composants DOM, chacun testé à 100% avec ses collaborateurs mockés).
+  // Coûteux avec le runner "command" ci-dessus (toute la suite `npm test`
+  // relancée à chaque mutant), mais délibéré : voir la discussion dans la
+  // session ayant introduit cette extension.
   mutate: [
     "shared/**/*.ts",
     "worker/**/*.ts",
-    "src/lib/color.ts",
-    "src/lib/sort.ts",
+    "src/**/*.ts",
     "!shared/types.ts",
     "!worker/listRoom.ts",
     "!worker/test/**",
     "!**/*.test.ts",
   ],
   ignorePatterns: ["dist", "coverage", "mutation-report", "playwright-report", "test-results", ".wrangler"],
-  // Baseline observed on this scope: 85.84%. `break` sits a bit below it so
-  // routine, honest gaps (equivalent mutants, thin edge cases) don't flake
-  // the build, while a real regression in test quality still fails CI.
+  // Seuils à recalibrer après une première exécution complète sur ce
+  // périmètre élargi (le score de référence de 85.84% ne portait que sur
+  // shared/worker/color.ts/sort.ts) — laissés inchangés pour l'instant afin
+  // de ne pas fixer un seuil de rupture arbitraire avant d'avoir un score
+  // observé sur le nouveau périmètre.
   thresholds: {
     high: 95,
     low: 85,

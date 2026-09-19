@@ -107,15 +107,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     };
     undoEntries.push(entry);
     if (undoEntries.length > MAX_UNDO_STACK) {
-      const removed = undoEntries.shift();
-      if (removed) clearTimeout(removed.timer);
+      // shift() ne peut renvoyer undefined que sur un tableau vide, ce que
+      // la condition ci-dessus exclut déjà (longueur > MAX_UNDO_STACK >= 1).
+      clearTimeout(undoEntries.shift()!.timer);
     }
     renderUndoToast();
   }
 
   function undoLast(): void {
-    const entry = undoEntries.pop();
-    if (!entry) return;
+    // Le bouton "Annuler" n'est affiché (voir renderUndoToast) que lorsque
+    // undoEntries n'est pas vide, et c'est le seul appelant de undoLast().
+    const entry = undoEntries.pop()!;
     clearTimeout(entry.timer);
     entry.undo();
     renderUndoToast();
@@ -221,14 +223,16 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       root.querySelector("#retry")?.addEventListener("click", () => location.reload());
       return;
     }
-    if (!state) return;
+    // Les trois branches ci-dessus couvrent exhaustivement tous les cas où
+    // state peut être nul (jamais réassigné à null une fois non-nul) : au
+    // delà de ce point, garanti non-nul pour le reste du module.
 
     if (!shellMounted) {
       // Built only once: re-creating this on every realtime update would
       // wipe out whatever the user is currently typing in the add-item
       // input whenever a broadcast arrives (e.g. someone else adds an item
       // while you're composing yours).
-      root.innerHTML = layoutHtml(state, connected);
+      root.innerHTML = layoutHtml(state!);
       wireHeader();
       wireAddForm();
       wireMenu();
@@ -244,20 +248,20 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function updateItemCounter(): void {
-    const el = root.querySelector("#item-counter");
-    if (!el || !state) return;
-    const total = state.items.length;
+    // Toujours appelée juste après que le gabarit contenant #item-counter a
+    // été construit (voir render()), et state garanti non-nul à ce stade.
+    const el = root.querySelector("#item-counter")!;
+    const total = state!.items.length;
     if (total === 0) {
       el.textContent = "";
       return;
     }
-    const checked = state.items.filter((i) => i.checked).length;
+    const checked = state!.items.filter((i) => i.checked).length;
     el.textContent = `${checked}/${total}`;
   }
 
   function checkCelebration(): void {
-    if (!state) return;
-    const isFullyChecked = state.items.length > 0 && state.items.every((i) => i.checked);
+    const isFullyChecked = state!.items.length > 0 && state!.items.every((i) => i.checked);
     if (wasFullyChecked !== null && isFullyChecked && !wasFullyChecked) celebrate();
     wasFullyChecked = isFullyChecked;
   }
@@ -276,17 +280,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function updateTitle(): void {
-    const titleEl = root.querySelector("#list-title") as HTMLElement | null;
-    if (!titleEl || !state) return;
+    // Appelée uniquement une fois le gabarit déjà construit (voir render()),
+    // #list-title et state garantis présents à ce stade.
+    const titleEl = root.querySelector("#list-title") as HTMLElement;
     if (titleEl.querySelector("input")) return; // user is mid-edit, don't clobber
-    if (titleEl.textContent !== state.name) titleEl.textContent = state.name;
+    if (titleEl.textContent !== state!.name) titleEl.textContent = state!.name;
   }
 
   function updateCategorySelect(): void {
-    const select = root.querySelector("#add-category") as HTMLSelectElement | null;
-    if (!select || !state) return;
+    const select = root.querySelector("#add-category") as HTMLSelectElement;
     const previous = select.value;
-    select.innerHTML = categoryOptionsHtml(state.categories);
+    select.innerHTML = categoryOptionsHtml(state!.categories);
     if ([...select.options].some((o) => o.value === previous)) select.value = previous;
   }
 
@@ -311,43 +315,46 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     panel.innerHTML = `<ul class="presence-list">${items.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`;
   }
 
+  // wireHeader()/wireMenu() ne s'exécutent qu'une fois le gabarit statique de
+  // layoutHtml() déjà en place (voir render()) : chaque élément qu'elles
+  // interrogent y est garanti présent, d'où les affirmations de type
+  // non-nul plutôt que des `?.`/`if` redondants à chaque usage.
   function wireHeader(): void {
-    root.querySelector("#btn-home")?.addEventListener("click", () => navigate("/"));
-    root.querySelector("#btn-hide-checked")?.addEventListener("click", (e) => {
+    root.querySelector("#btn-home")!.addEventListener("click", () => navigate("/"));
+    root.querySelector("#btn-hide-checked")!.addEventListener("click", (e) => {
       toggleHideCheckedPreference();
       updateHideCheckedButton(e.currentTarget as HTMLElement);
       renderCategories();
       renderQuickAdd();
     });
 
-    const presenceBtn = root.querySelector("#btn-presence");
-    const presencePanel = root.querySelector("#presence-panel") as HTMLElement | null;
-    presenceBtn?.addEventListener("click", (e) => {
+    const presenceBtn = root.querySelector("#btn-presence")!;
+    const presencePanel = root.querySelector("#presence-panel") as HTMLElement;
+    presenceBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (presencePanel) presencePanel.hidden = !presencePanel.hidden;
+      presencePanel.hidden = !presencePanel.hidden;
     });
     document.addEventListener("click", () => {
-      if (presencePanel) presencePanel.hidden = true;
+      presencePanel.hidden = true;
     });
 
-    const searchBar = root.querySelector("#search-bar") as HTMLElement | null;
-    const searchInput = root.querySelector("#search-input") as HTMLInputElement | null;
+    const searchBar = root.querySelector("#search-bar") as HTMLElement;
+    const searchInput = root.querySelector("#search-input") as HTMLInputElement;
     let searchDebounce: ReturnType<typeof setTimeout> | null = null;
     const closeSearch = () => {
       if (searchDebounce) clearTimeout(searchDebounce);
-      if (searchBar) searchBar.hidden = true;
+      searchBar.hidden = true;
       searchQuery = "";
-      if (searchInput) searchInput.value = "";
+      searchInput.value = "";
       renderCategories();
     };
-    root.querySelector("#btn-search")?.addEventListener("click", () => {
-      if (!searchBar) return;
+    root.querySelector("#btn-search")!.addEventListener("click", () => {
       searchBar.hidden = !searchBar.hidden;
-      if (!searchBar.hidden) searchInput?.focus();
+      if (!searchBar.hidden) searchInput.focus();
       else closeSearch();
     });
-    root.querySelector("#search-close")?.addEventListener("click", closeSearch);
-    searchInput?.addEventListener("input", () => {
+    root.querySelector("#search-close")!.addEventListener("click", closeSearch);
+    searchInput.addEventListener("input", () => {
       // Attend une courte pause dans la frappe avant de reconstruire toute
       // la liste (renderCategories() n'est pas incrémental) : sur une liste
       // chargée, filtrer à chaque caractère tapé referait tout le travail à
@@ -358,16 +365,15 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         renderCategories();
       }, 150);
     });
-    searchInput?.addEventListener("keydown", (e) => {
+    searchInput.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeSearch();
     });
-    const titleEl = root.querySelector("#list-title") as HTMLElement | null;
-    titleEl?.addEventListener("click", () => {
-      if (!state) return;
+    const titleEl = root.querySelector("#list-title") as HTMLElement;
+    titleEl.addEventListener("click", () => {
       startEdit(titleEl, {
-        value: state.name,
+        value: state!.name,
         onCommit: (value) => {
-          if (value && state) conn.send({ type: "renameList", name: value });
+          if (value) conn.send({ type: "renameList", name: value });
           else render();
         },
       });
@@ -375,39 +381,38 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function wireMenu(): void {
-    const menuBtn = root.querySelector("#btn-menu");
-    const panel = root.querySelector("#menu-panel") as HTMLElement | null;
-    menuBtn?.addEventListener("click", (e) => {
+    const menuBtn = root.querySelector("#btn-menu")!;
+    const panel = root.querySelector("#menu-panel") as HTMLElement;
+    menuBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (panel) panel.hidden = !panel.hidden;
+      panel.hidden = !panel.hidden;
     });
     document.addEventListener("click", () => {
-      if (panel) panel.hidden = true;
+      panel.hidden = true;
     });
 
-    panel?.querySelector('[data-action="share"]')?.addEventListener("click", () => {
-      if (!state) return;
-      openShareModal(state.code, state.name, {
+    panel.querySelector('[data-action="share"]')!.addEventListener("click", () => {
+      openShareModal(state!.code, state!.name, {
         onExport: () => {
-          if (state) exportListState(state);
+          exportListState(state!);
         },
         onImportFile: handleImportFile,
       });
     });
-    panel?.querySelector('[data-action="theme"]')?.addEventListener("click", (e) => {
+    panel.querySelector('[data-action="theme"]')!.addEventListener("click", (e) => {
       cycleThemePreference();
       updateThemeMenuItem(e.currentTarget as HTMLElement);
     });
-    panel?.querySelector('[data-action="accessibility"]')?.addEventListener("click", (e) => {
+    panel.querySelector('[data-action="accessibility"]')!.addEventListener("click", (e) => {
       toggleAccessibilityPreference();
       updateAccessibilityMenuItem(e.currentTarget as HTMLElement);
     });
-    panel?.querySelector('[data-action="item-sort"]')?.addEventListener("click", (e) => {
+    panel.querySelector('[data-action="item-sort"]')!.addEventListener("click", (e) => {
       cycleItemSortPreference();
       updateItemSortMenuItem(e.currentTarget as HTMLElement);
       renderCategories();
     });
-    panel?.querySelector('[data-action="notifications"]')?.addEventListener("click", (e) => {
+    panel.querySelector('[data-action="notifications"]')!.addEventListener("click", (e) => {
       // e.currentTarget devient null une fois l'événement terminé : on le
       // capture avant l'attente de toggleNotifications() (permission
       // navigateur potentiellement asynchrone).
@@ -418,26 +423,24 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         else if (status === "unsupported") showToast("Notifications indisponibles sur ce navigateur.");
       });
     });
-    panel?.querySelector('[data-action="manage-categories"]')?.addEventListener("click", openCategoryManager);
-    panel?.querySelector('[data-action="manage-suggestions"]')?.addEventListener("click", openSuggestionManager);
-    const clearCheckedBtn = panel?.querySelector<HTMLButtonElement>('[data-action="clear-checked"]');
-    if (clearCheckedBtn) {
-      wireConfirmClick(clearCheckedBtn, {
-        armedText: "Confirmer : tout vider ?",
-        labelEl: clearCheckedBtn.querySelector<HTMLElement>(".menu-item-label") ?? undefined,
-        isDisabled: () => (state?.items.filter((i) => i.checked).length ?? 0) === 0,
-        onConfirm: () => {
-          const checkedItems = state?.items.filter((i) => i.checked) ?? [];
-          if (checkedItems.length === 0) return;
-          conn.send({ type: "clearChecked" });
-          pushUndo(`${checkedItems.length} article(s) coché(s) vidé(s)`, () => {
-            for (const item of checkedItems) pendingLocalItemIds.add(item.id);
-            conn.send({ type: "restoreItems", items: checkedItems });
-          });
-          if (panel) panel.hidden = true;
-        },
-      });
-    }
+    panel.querySelector('[data-action="manage-categories"]')!.addEventListener("click", openCategoryManager);
+    panel.querySelector('[data-action="manage-suggestions"]')!.addEventListener("click", openSuggestionManager);
+    const clearCheckedBtn = panel.querySelector<HTMLButtonElement>('[data-action="clear-checked"]')!;
+    wireConfirmClick(clearCheckedBtn, {
+      armedText: "Confirmer : tout vider ?",
+      labelEl: clearCheckedBtn.querySelector<HTMLElement>(".menu-item-label")!,
+      isDisabled: () => state!.items.filter((i) => i.checked).length === 0,
+      onConfirm: () => {
+        const checkedItems = state!.items.filter((i) => i.checked);
+        if (checkedItems.length === 0) return;
+        conn.send({ type: "clearChecked" });
+        pushUndo(`${checkedItems.length} article(s) coché(s) vidé(s)`, () => {
+          for (const item of checkedItems) pendingLocalItemIds.add(item.id);
+          conn.send({ type: "restoreItems", items: checkedItems });
+        });
+        panel.hidden = true;
+      },
+    });
   }
 
   async function handleImportFile(file: File): Promise<void> {
@@ -495,7 +498,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function openCategoryManager(): void {
-    if (!state) return;
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     let openPaletteFor: string | null = null;
@@ -533,7 +535,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <p class="add-form-hint">${PRIVACY_HINT}</p>
         </div>
       `;
-      overlay.querySelector(".modal-close")?.addEventListener("click", close);
+      overlay.querySelector(".modal-close")!.addEventListener("click", close);
       overlay.querySelectorAll<HTMLElement>(".cat-name").forEach((el) => {
         el.addEventListener("click", () => {
           startEdit(el, {
@@ -553,8 +555,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       });
       overlay.querySelectorAll<HTMLElement>(".color-swatch").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const id = btn.closest("li")?.dataset.id;
-          if (!id) return;
+          // .color-swatch n'apparaît que dans colorPaletteHtml(c), toujours
+          // rendu à l'intérieur du <li data-id> de sa propre catégorie c.
+          const id = btn.closest("li")!.dataset.id!;
           const raw = btn.dataset.color!;
           conn.send({ type: "setCategoryColor", id, color: raw === "auto" ? null : Number(raw) });
           openPaletteFor = null;
@@ -563,8 +566,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       });
       overlay.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
         const id = btn.dataset.id!;
-        const category = state!.categories.find((c) => c.id === id);
-        if (!category) return;
+        // Vient de state!.categories à l'instant même du rendu ci-dessus :
+        // toujours trouvée.
+        const category = state!.categories.find((c) => c.id === id)!;
         wireConfirmClick(btn, {
           armedLabel: `Confirmer la suppression de « ${category.name} »`,
           onConfirm: () => {
@@ -574,7 +578,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           },
         });
       });
-      overlay.querySelector("#new-category-form")?.addEventListener("submit", (e) => {
+      overlay.querySelector("#new-category-form")!.addEventListener("submit", (e) => {
         e.preventDefault();
         const input = overlay.querySelector("#new-category-name") as HTMLInputElement;
         const name = input.value.trim();
@@ -617,7 +621,6 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function openSuggestionManager(): void {
-    if (!state) return;
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     let searchQuery = "";
@@ -658,8 +661,10 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
               // be silently dropped by the server.
               const newKey = historyKey(value);
               if (newKey !== oldKey) {
-                el.closest("li")
-                  ?.querySelectorAll<HTMLElement>("[data-key]")
+                // .suggestion-name est toujours à l'intérieur du <li
+                // data-key> de sa propre ligne.
+                el.closest("li")!
+                  .querySelectorAll<HTMLElement>("[data-key]")
                   .forEach((node) => {
                     node.dataset.key = newKey;
                   });
@@ -680,8 +685,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       });
       container.querySelectorAll<HTMLElement>('[data-action="del"]').forEach((btn) => {
         const key = btn.dataset.key!;
-        const entry = state!.history.find((h) => h.key === key);
-        if (!entry) return;
+        // Vient de state!.history à l'instant même du rendu ci-dessus :
+        // toujours trouvée.
+        const entry = state!.history.find((h) => h.key === key)!;
         wireConfirmClick(btn, {
           armedLabel: `Confirmer la suppression de la suggestion « ${entry.label} »`,
           onConfirm: () => {
@@ -697,8 +703,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     // tourne aussi bien sur "input" que sur les mises à jour reçues du
     // serveur pendant que l'utilisateur tape).
     const renderList = (): void => {
-      const container = overlay.querySelector("#suggestion-list");
-      if (!container) return;
+      // #suggestion-list est dans le gabarit statique de renderShell(),
+      // toujours rendu avant que renderList() ne soit jamais appelée.
+      const container = overlay.querySelector("#suggestion-list")!;
       if (state!.history.length === 0) {
         container.innerHTML = `<p class="hint">Aucune suggestion pour l'instant : elles apparaissent une fois qu'un article a été coché.</p>`;
         return;
@@ -736,7 +743,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
           <p class="add-form-hint">${PRIVACY_HINT}</p>
         </div>
       `;
-      overlay.querySelector(".modal-close")?.addEventListener("click", close);
+      overlay.querySelector(".modal-close")!.addEventListener("click", close);
       const searchInput = overlay.querySelector<HTMLInputElement>("#suggestion-search");
       searchInput?.addEventListener("input", () => {
         searchQuery = searchInput.value;
@@ -765,24 +772,23 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function wireAddForm(): void {
-    const form = root.querySelector("#add-form") as HTMLFormElement | null;
-    const input = root.querySelector("#add-input") as HTMLInputElement | null;
-    const preview = root.querySelector("#add-preview-qty") as HTMLElement | null;
-    const suggestionsEl = root.querySelector("#suggestions") as HTMLElement | null;
-    const categorySelect = root.querySelector("#add-category") as HTMLSelectElement | null;
-    if (!form || !input) return;
+    // Toutes les cibles ci-dessous font partie du gabarit statique de
+    // layoutHtml(), garanti déjà en place (voir render()).
+    const form = root.querySelector("#add-form") as HTMLFormElement;
+    const input = root.querySelector("#add-input") as HTMLInputElement;
+    const preview = root.querySelector("#add-preview-qty") as HTMLElement;
+    const suggestionsEl = root.querySelector("#suggestions") as HTMLElement;
+    const categorySelect = root.querySelector("#add-category") as HTMLSelectElement;
 
     input.addEventListener("input", () => {
       const { quantity } = parseFreeText(input.value);
-      if (preview) {
-        preview.hidden = !quantity;
-        preview.textContent = quantity;
-      }
+      preview.hidden = !quantity;
+      preview.textContent = quantity;
       renderTypeahead(input.value);
     });
     input.addEventListener("blur", () => {
       setTimeout(() => {
-        if (suggestionsEl) suggestionsEl.hidden = true;
+        suggestionsEl.hidden = true;
       }, 150);
     });
     input.addEventListener("focus", () => renderTypeahead(input.value));
@@ -791,18 +797,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       e.preventDefault();
       const rawText = input.value.trim();
       if (!rawText) return;
-      const categoryId = categorySelect?.value || null;
+      const categoryId = categorySelect.value || null;
       const id = uid();
       pendingLocalItemIds.add(id);
       conn.send({ type: "addItem", id, rawText, categoryId });
       input.value = "";
-      if (preview) preview.hidden = true;
-      if (suggestionsEl) suggestionsEl.hidden = true;
+      preview.hidden = true;
+      suggestionsEl.hidden = true;
       input.focus();
     });
 
     function renderTypeahead(query: string): void {
-      if (!suggestionsEl) return;
       const q = query.trim().toLowerCase();
       if (!q) {
         suggestionsEl.hidden = true;
@@ -829,8 +834,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function renderQuickAdd(): void {
-    const el = root.querySelector("#quick-add");
-    if (!el || !state) return;
+    // #quick-add fait partie du gabarit statique, state garanti non-nul
+    // (voir render()).
+    const el = root.querySelector("#quick-add")!;
     if (getHideCheckedPreference()) {
       el.innerHTML = "";
       return;
@@ -857,9 +863,8 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function suggestionPool(): HistoryEntry[] {
-    if (!state) return [];
-    const activeNames = new Set(state.items.filter((i) => !i.checked).map((i) => i.name.trim().toLowerCase()));
-    return [...state.history].filter((h) => !activeNames.has(h.key)).sort((a, b) => alnumCompare(a.label, b.label));
+    const activeNames = new Set(state!.items.filter((i) => !i.checked).map((i) => i.name.trim().toLowerCase()));
+    return [...state!.history].filter((h) => !activeNames.has(h.key)).sort((a, b) => alnumCompare(a.label, b.label));
   }
 
   function addFromHistory(entry: HistoryEntry): void {
@@ -869,8 +874,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
   }
 
   function renderCategories(): void {
-    const container = root.querySelector("#categories") as HTMLElement | null;
-    if (!container || !state) return;
+    // #categories fait partie du gabarit statique, state garanti non-nul
+    // (voir render()).
+    const container = root.querySelector("#categories") as HTMLElement;
 
     const query = searchQuery.trim().toLowerCase();
     const alphabeticalItems = getItemSortPreference() === "alphabetical";
@@ -884,7 +890,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
         (a, b) => Number(a.checked) - Number(b.checked) || (alphabeticalItems ? alnumCompare(a.name, b.name) : a.order - b.order),
       );
 
-    const cats = [...state.categories].sort((a, b) => a.order - b.order);
+    const cats = [...state!.categories].sort((a, b) => a.order - b.order);
     type Group = { id: string | null; name: string; items: Item[]; showHeader: boolean; hue: number };
     let groups: Group[] = cats.map((c) => ({
       id: c.id,
@@ -920,7 +926,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
       return;
     }
 
-    if (groups.length === 0 && hideChecked && state.items.length > 0) {
+    if (groups.length === 0 && hideChecked && state!.items.length > 0) {
       container.innerHTML = `<div class="empty-state">Tous les articles sont cochés (et masqués).</div>`;
       disposeItemDnd?.();
       disposeCategoryDnd?.();
@@ -984,8 +990,9 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     });
 
     container.querySelectorAll<HTMLElement>('[data-action="delete-item"]').forEach((btn) => {
-      const item = state!.items.find((i) => i.id === btn.dataset.id);
-      if (!item) return;
+      // Vient de state!.items à l'instant même du rendu ci-dessus : toujours
+      // trouvé.
+      const item = state!.items.find((i) => i.id === btn.dataset.id)!;
       wireConfirmClick(btn, {
         armedLabel: `Confirmer la suppression de « ${item.name} »`,
         onConfirm: () => {
@@ -1140,14 +1147,18 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     return [`<option value="" ${selectedId === null ? "selected" : ""}>Sans catégorie</option>`, sorted.map(optionHtml).join("")].join("");
   }
 
-  function layoutHtml(s: ListState, isConnected: boolean): string {
+  function layoutHtml(s: ListState): string {
+    // Le point de connexion démarre toujours hors-ligne : ce gabarit n'est
+    // construit qu'une fois (voir render(), shellMounted), et systématiquement
+    // avant conn.connect() — updateConnDot() prend ensuite le relais pour
+    // refléter les changements d'état de la connexion en direct.
     return `
       <div class="list-view">
         <header class="list-header">
           <button class="icon-btn" id="btn-home" aria-label="Accueil">${icons.back}</button>
           <h1 class="list-title" id="list-title">${escapeHtml(s.name)}</h1>
           <span class="item-counter" id="item-counter" aria-live="polite"></span>
-          <span class="conn-dot ${isConnected ? "online" : ""}" id="conn-dot" title="${isConnected ? "Synchronisé" : "Connexion…"}"></span>
+          <span class="conn-dot" id="conn-dot" title="Connexion…"></span>
           <button class="icon-btn presence-btn" id="btn-presence" aria-label="Personnes connectées">
             ${icons.users}<span class="presence-count" id="presence-count">1</span>
           </button>

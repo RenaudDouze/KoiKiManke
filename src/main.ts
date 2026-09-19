@@ -2,6 +2,7 @@ import "./style.css";
 import { applyTheme, getThemePreference } from "./lib/theme";
 import { applyAccessibility, getAccessibilityPreference } from "./lib/accessibility";
 import { appPath, routePath } from "./lib/basePath";
+import { consumeImportParam } from "./lib/compactShare";
 
 // Appliqué avant le premier rendu pour éviter un flash de thème clair suivi
 // d'un bascule sombre si l'utilisateur a choisi un thème manuel.
@@ -33,16 +34,26 @@ async function render(): Promise<void> {
   const token = ++renderToken;
   const match = routePath().match(/^\/l\/([A-Za-z0-9]+)\/?$/);
 
+  // Lien/QR compact (voir src/lib/compactShare.ts) : `?import=...` est retiré
+  // de l'URL dès sa lecture, qu'il soit valide ou non, pour qu'un
+  // rafraîchissement de page ne redéclenche pas la même invite d'import.
+  // Chaque vue décode elle-même la valeur brute (main.ts reste un routeur
+  // minimal, sans logique métier propre à l'import) — voir mountListView /
+  // mountHomeView.
+  const url = new URL(location.href);
+  const importParam = consumeImportParam(url);
+  if (importParam !== null) history.replaceState({}, "", url.toString());
+
   if (match) {
     const { mountListView } = await import("./views/list");
     if (token !== renderToken) return;
     cleanup?.();
-    cleanup = mountListView(app, match[1].toUpperCase(), navigate);
+    cleanup = mountListView(app, match[1].toUpperCase(), navigate, importParam);
   } else {
     const { mountHomeView } = await import("./views/home");
     if (token !== renderToken) return;
     cleanup?.();
-    cleanup = mountHomeView(app, navigate);
+    cleanup = mountHomeView(app, navigate, importParam);
   }
 }
 

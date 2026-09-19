@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountListView } from "./list";
 import { cacheListState } from "../lib/storage";
+import { encodeListToParam } from "../lib/compactShare";
 import type { Category, ClientMessage, HistoryEntry, Item, ListState } from "../../shared/types";
 
 // --- ws.ts : la vraie classe ouvrirait une connexion WebSocket réelle ---
@@ -205,10 +206,10 @@ describe("mountListView", () => {
     vi.unstubAllGlobals();
   });
 
-  async function mount(fetched: ListState | null = sampleState(), fetchError = false): Promise<FakeListConnection> {
+  async function mount(fetched: ListState | null = sampleState(), fetchError = false, importParam: string | null = null): Promise<FakeListConnection> {
     if (fetchError) fetchListState.mockRejectedValue(new Error("network"));
     else fetchListState.mockResolvedValue(fetched);
-    cleanup = mountListView(root, "ABCDEF", navigate);
+    cleanup = mountListView(root, "ABCDEF", navigate, importParam);
     await vi.waitFor(() => expect(fetchListState).toHaveBeenCalled());
     await vi.waitFor(() => expect(fakeConnectionInstances.length).toBeGreaterThan(0));
     const conn = fakeConnectionInstances[fakeConnectionInstances.length - 1] as FakeListConnection;
@@ -458,9 +459,14 @@ describe("mountListView", () => {
       await mount(state);
       root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
 
-      expect(openShareModal).toHaveBeenCalledWith("ABCDEF", "Courses", expect.objectContaining({ onExport: expect.any(Function), onImportFile: expect.any(Function) }));
+      expect(openShareModal).toHaveBeenCalledWith(
+        "ABCDEF",
+        "Courses",
+        expect.objectContaining({ name: "Courses", items: state.items, categories: state.categories, history: state.history }),
+        expect.objectContaining({ onExport: expect.any(Function), onImportFile: expect.any(Function) }),
+      );
 
-      const actions = openShareModal.mock.calls[0][2];
+      const actions = openShareModal.mock.calls[0][3];
       actions.onExport();
       expect(exportListState).toHaveBeenCalledWith(expect.objectContaining({ code: "ABCDEF" }));
     });
@@ -1084,7 +1090,7 @@ describe("mountListView", () => {
     it("un fichier invalide affiche un message d'erreur en toast", async () => {
       const conn = await mount();
       root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
-      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][2];
+      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][3];
       const file = new File(["not json"], "x.json", { type: "application/json" });
 
       await actions.onImportFile(file);
@@ -1096,7 +1102,7 @@ describe("mountListView", () => {
     it("une erreur de lecture non standard (pas une instance Error) affiche le message générique", async () => {
       await mount();
       root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
-      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][2];
+      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][3];
       const file = new File(["{}"], "x.json", { type: "application/json" });
       // file.text() peut rejeter avec autre chose qu'une Error (ex: une
       // DOMException, qui ne descend pas du prototype Error natif).
@@ -1110,7 +1116,7 @@ describe("mountListView", () => {
     it("un fichier valide ouvre le modal d'import avec le résumé du contenu", async () => {
       await mount();
       root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
-      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][2];
+      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][3];
       const file = new File([JSON.stringify({ items: [makeItem()], categories: [makeCategory()] })], "x.json", { type: "application/json" });
 
       await actions.onImportFile(file);
@@ -1123,7 +1129,7 @@ describe("mountListView", () => {
       const conn = await mount();
       const importFile = async () => {
         root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
-        const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][2];
+        const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][3];
         const file = new File([JSON.stringify({ items: [], categories: [] })], "x.json", { type: "application/json" });
         await actions.onImportFile(file);
       };
@@ -1139,7 +1145,7 @@ describe("mountListView", () => {
       vi.stubGlobal("confirm", vi.fn(() => true));
       const conn = await mount();
       root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
-      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][2];
+      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][3];
       const file = new File([JSON.stringify({ items: [], categories: [] })], "x.json", { type: "application/json" });
       await actions.onImportFile(file);
 
@@ -1152,7 +1158,7 @@ describe("mountListView", () => {
       vi.stubGlobal("confirm", vi.fn(() => false));
       const conn = await mount();
       root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
-      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][2];
+      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][3];
       const file = new File([JSON.stringify({ items: [], categories: [] })], "x.json", { type: "application/json" });
       await actions.onImportFile(file);
 
@@ -1164,7 +1170,7 @@ describe("mountListView", () => {
     it("« Annuler » ferme le modal sans rien envoyer", async () => {
       const conn = await mount();
       root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
-      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][2];
+      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][3];
       const file = new File([JSON.stringify({ items: [], categories: [] })], "x.json", { type: "application/json" });
       await actions.onImportFile(file);
 
@@ -1177,7 +1183,7 @@ describe("mountListView", () => {
     it("cliquer hors du modal d'import le ferme, Échap aussi", async () => {
       await mount();
       root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
-      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][2];
+      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][3];
       const file = new File([JSON.stringify({ items: [], categories: [] })], "x.json", { type: "application/json" });
       await actions.onImportFile(file);
 
@@ -1188,7 +1194,7 @@ describe("mountListView", () => {
     it("le bouton de fermeture du modal d'import fonctionne aussi", async () => {
       await mount();
       root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
-      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][2];
+      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][3];
       const file = new File([JSON.stringify({ items: [], categories: [] })], "x.json", { type: "application/json" });
       await actions.onImportFile(file);
 
@@ -1199,7 +1205,7 @@ describe("mountListView", () => {
     it("cliquer à l'intérieur du modal d'import ne le ferme pas, une touche autre qu'Échap non plus", async () => {
       await mount();
       root.querySelector('[data-action="share"]')?.dispatchEvent(new Event("click"));
-      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][2];
+      const actions = openShareModal.mock.calls[openShareModal.mock.calls.length - 1][3];
       const file = new File([JSON.stringify({ items: [], categories: [] })], "x.json", { type: "application/json" });
       await actions.onImportFile(file);
 
@@ -1207,6 +1213,39 @@ describe("mountListView", () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
 
       expect(document.querySelector(".modal-overlay")).not.toBeNull();
+    });
+  });
+
+  describe("lien/QR compact (?import=, voir src/lib/compactShare.ts)", () => {
+    it("un paramètre valide ouvre directement l'invite fusion/remplacement, sans attendre la connexion", async () => {
+      const encoded = encodeListToParam({ name: "Reçue", items: [makeItem()], categories: [makeCategory()], history: [] });
+      fetchListState.mockResolvedValue(sampleState());
+      cleanup = mountListView(root, "ABCDEF", navigate, encoded);
+
+      expect(document.querySelector(".modal h2")?.textContent).toBe("Importer la liste");
+      expect(document.querySelector(".modal")?.textContent).toContain("1 article(s) et 1 catégorie(s)");
+    });
+
+    it("« Fusionner » sur l'invite ouverte depuis un lien compact envoie bien importState, même avant connexion", async () => {
+      const encoded = encodeListToParam({ name: "Reçue", items: [makeItem()], categories: [], history: [] });
+      const conn = await mount(sampleState(), false, encoded);
+
+      (document.querySelector("#import-merge") as HTMLButtonElement).click();
+
+      expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: "importState", mode: "merge" }));
+    });
+
+    it("un paramètre invalide ou corrompu affiche un toast plutôt que de planter", async () => {
+      fetchListState.mockResolvedValue(sampleState());
+      cleanup = mountListView(root, "ABCDEF", navigate, "%%% pas un lien compact valide %%%");
+
+      expect(document.querySelector(".toast")?.textContent).toBe("Lien d'import invalide ou corrompu.");
+      expect(document.querySelector(".modal-overlay")).toBeNull();
+    });
+
+    it("sans paramètre (navigation normale), aucune invite ne s'ouvre automatiquement", async () => {
+      await mount();
+      expect(document.querySelector(".modal-overlay")).toBeNull();
     });
   });
 

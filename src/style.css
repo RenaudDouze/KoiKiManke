@@ -1019,6 +1019,20 @@ button:focus-visible {
   gap: 0.6rem;
 }
 
+/* Section "lien/QR compact" du modal de partage (voir shareModal.ts) :
+   dépliée à la demande sous son propre bouton, pas dans le rendu initial de
+   la modale (voir sa bascule dans shareModal.ts). */
+.compact-share {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.compact-share .add-form-hint {
+  text-align: center;
+  margin: 0 0 0.8rem;
+}
+
 .manage-category-list {
   list-style: none;
   margin: 0 0 1rem;

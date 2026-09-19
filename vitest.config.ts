@@ -47,6 +47,7 @@ export default defineConfig({
         "src/lib/presence.ts",
         "src/lib/storage.ts",
         "src/lib/importExport.ts",
+        "src/lib/compactShare.ts",
         "src/lib/dnd.ts",
         "src/lib/swipe.ts",
         "src/lib/ws.ts",

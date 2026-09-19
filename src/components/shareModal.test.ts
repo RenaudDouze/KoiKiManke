@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openShareModal } from "./shareModal";
+import { decodeListFromParam } from "../lib/compactShare";
+import type { ImportPayload } from "../lib/importExport";
 
 vi.mock("./qr", () => ({
   renderQrSvg: vi.fn(async (text: string) => `<svg data-text="${text}"></svg>`),
@@ -12,10 +14,23 @@ async function flushPromises(): Promise<void> {
   await Promise.resolve();
 }
 
-function open(actions?: Partial<{ onExport: () => void; onImportFile: (file: File) => void }>) {
+function samplePayload(overrides: Partial<ImportPayload> = {}): ImportPayload {
+  return {
+    name: "Courses",
+    items: [{ id: "i1", name: "Pommes", quantity: "2 kg", categoryId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0 }],
+    categories: [],
+    history: [],
+    ...overrides,
+  };
+}
+
+function open(
+  actions?: Partial<{ onExport: () => void; onImportFile: (file: File) => void }>,
+  payload: ImportPayload = samplePayload(),
+) {
   const onExport = actions?.onExport ?? vi.fn();
   const onImportFile = actions?.onImportFile ?? vi.fn();
-  openShareModal("ABCDEF", "Courses", { onExport, onImportFile });
+  openShareModal("ABCDEF", "Courses", payload, { onExport, onImportFile });
   return { onExport, onImportFile };
 }
 
@@ -47,7 +62,7 @@ describe("openShareModal", () => {
   });
 
   it("échappe un nom de liste contenant du HTML", () => {
-    openShareModal("ABCDEF", "<img src=x>", { onExport: vi.fn(), onImportFile: vi.fn() });
+    openShareModal("ABCDEF", "<img src=x>", samplePayload(), { onExport: vi.fn(), onImportFile: vi.fn() });
     const overlay = document.querySelector(".modal-overlay") as HTMLElement;
 
     expect(overlay.querySelector("h2")?.innerHTML).not.toContain("<img");
@@ -231,5 +246,80 @@ describe("openShareModal", () => {
 
     expect(onImportFile).not.toHaveBeenCalled();
     expect(document.querySelector(".modal-overlay")).not.toBeNull();
+  });
+
+  describe("lien/QR compact", () => {
+    it("est replié par défaut", () => {
+      open();
+      const section = document.querySelector("#compact-share") as HTMLElement;
+      expect(section.hidden).toBe(true);
+      expect(document.querySelector("#toggle-compact-share")?.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("un premier clic sur la bascule le déplie, génère le lien et son QR (décodable)", async () => {
+      const payload = samplePayload({ name: "Ma liste" });
+      open(undefined, payload);
+      // Attend que le premier QR (lien direct) soit résolu avant de déclencher
+      // le second (import("./qr") concurrent sinon, voir renderQrInto) : deux
+      // dynamic import() de la même spécification avant résolution du premier
+      // ne partagent pas forcément le même mock dans cet environnement de test.
+      await vi.waitFor(() => expect(document.querySelector("#qr-wrap")?.innerHTML).toContain("<svg"));
+      const toggle = document.querySelector("#toggle-compact-share") as HTMLButtonElement;
+
+      toggle.click();
+
+      const section = document.querySelector("#compact-share") as HTMLElement;
+      expect(section.hidden).toBe(false);
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      const link = document.querySelector("#compact-link")?.textContent ?? "";
+      expect(link).toContain("?import=");
+      expect(link).not.toContain("/l/ABCDEF");
+      const encoded = new URL(link).searchParams.get("import")!;
+      expect(decodeListFromParam(encoded)).toEqual(payload);
+
+      await vi.waitFor(() => expect(document.querySelector("#compact-qr-wrap")?.innerHTML).toContain("<svg"));
+      expect(document.querySelector("#compact-qr-wrap")?.innerHTML).toContain(link);
+    });
+
+    it("un second clic replie la section sans recalculer le lien", async () => {
+      open();
+      const toggle = document.querySelector("#toggle-compact-share") as HTMLButtonElement;
+      toggle.click();
+      await flushPromises();
+      const link = document.querySelector("#compact-link")?.textContent;
+
+      toggle.click();
+      expect((document.querySelector("#compact-share") as HTMLElement).hidden).toBe(true);
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+      toggle.click();
+      expect((document.querySelector("#compact-share") as HTMLElement).hidden).toBe(false);
+      expect(document.querySelector("#compact-link")?.textContent).toBe(link);
+    });
+
+    it("« Copier le lien compact » copie le lien et affiche une confirmation temporaire", async () => {
+      open();
+      (document.querySelector("#toggle-compact-share") as HTMLButtonElement).click();
+      const link = document.querySelector("#compact-link")?.textContent;
+      const btn = document.querySelector("#copy-compact-link") as HTMLButtonElement;
+
+      btn.click();
+      await flushPromises();
+
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(link);
+      expect(btn.textContent).toBe("Copié !");
+
+      vi.advanceTimersByTime(1200);
+      expect(btn.textContent).toBe("Copier le lien compact");
+    });
+
+    it("« Copier le lien compact » ne fait rien tant que la section n'a jamais été dépliée", async () => {
+      open();
+
+      (document.querySelector("#copy-compact-link") as HTMLButtonElement).click();
+      await flushPromises();
+
+      expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    });
   });
 });

@@ -10,7 +10,8 @@ import { wireConfirmClick } from "../lib/confirmClick";
 import { enableDragReorder } from "../lib/dnd";
 import { enableSwipeToDelete } from "../lib/swipe";
 import { openShareModal } from "../components/shareModal";
-import { exportListState, parseImportFile } from "../lib/importExport";
+import { exportListState, parseImportFile, toImportPayload } from "../lib/importExport";
+import { decodeListFromParam } from "../lib/compactShare";
 import { icons } from "../lib/icons";
 import { trapFocus } from "../lib/focusTrap";
 import { resolveCategoryHue } from "../lib/color";
@@ -66,7 +67,12 @@ function colorPaletteHtml(category: Category): string {
   return `<div class="color-palette">${autoSwatch}${hueSwatches}</div>`;
 }
 
-export function mountListView(root: HTMLElement, code: string, navigate: (path: string) => void): () => void {
+export function mountListView(
+  root: HTMLElement,
+  code: string,
+  navigate: (path: string) => void,
+  importParam: string | null = null,
+): () => void {
   let state: ListState | null = getCachedListState(code);
   let connected = false;
   let loading = state === null;
@@ -182,6 +188,17 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     updateConnDot();
   });
   conn.onError((message) => showToast(message));
+
+  // Lien/QR compact (voir src/lib/compactShare.ts, src/main.ts) : réutilise
+  // le même choix fusion/remplacement qu'un import de fichier JSON
+  // (openImportModal), plutôt que de dupliquer ce flux — conn.send() met en
+  // file d'attente tant que le WebSocket n'est pas encore connecté, donc pas
+  // besoin d'attendre conn.connect() ci-dessous pour ouvrir l'invite.
+  if (importParam !== null) {
+    const imported = decodeListFromParam(importParam);
+    if (imported) openImportModal(imported);
+    else showToast("Lien d'import invalide ou corrompu.");
+  }
 
   (async () => {
     try {
@@ -392,7 +409,7 @@ export function mountListView(root: HTMLElement, code: string, navigate: (path: 
     });
 
     panel.querySelector('[data-action="share"]')!.addEventListener("click", () => {
-      openShareModal(state!.code, state!.name, {
+      openShareModal(state!.code, state!.name, toImportPayload(state!), {
         onExport: () => {
           exportListState(state!);
         },

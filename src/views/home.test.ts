@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountHomeView } from "./home";
+import { encodeListToParam } from "../lib/compactShare";
 import type { RecentList } from "../lib/storage";
 import type { ListState } from "../../shared/types";
 
@@ -242,5 +243,78 @@ describe("mountHomeView", () => {
   it("le nettoyage retourné est un no-op", () => {
     const cleanup = mountHomeView(root, navigate);
     expect(() => cleanup()).not.toThrow();
+  });
+
+  describe("lien/QR compact (?import=, voir src/lib/compactShare.ts)", () => {
+    const encoded = encodeListToParam({
+      name: "Reçue",
+      items: [{ id: "i1", name: "Pommes", quantity: "", categoryId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0 }],
+      categories: [{ id: "c1", name: "Fruits", order: 0 }],
+      history: [],
+    });
+
+    it("sans paramètre, aucune bannière d'import ne s'affiche", () => {
+      mountHomeView(root, navigate);
+      expect(root.textContent).not.toContain("Liste partagée reçue");
+    });
+
+    it("un paramètre valide affiche une bannière résumant le contenu", () => {
+      mountHomeView(root, navigate, encoded);
+
+      expect(root.textContent).toContain("Liste partagée reçue");
+      expect(root.textContent).toContain("1 article(s) et 1 catégorie(s)");
+      expect(root.textContent).toContain("« Reçue »");
+    });
+
+    it("un paramètre invalide ou corrompu n'affiche aucune bannière", () => {
+      mountHomeView(root, navigate, "%%% pas un lien compact valide %%%");
+
+      expect(root.textContent).not.toContain("Liste partagée reçue");
+    });
+
+    it("« Créer une nouvelle liste » crée la liste, mémorise le lien puis navigue en reportant le paramètre", async () => {
+      createList.mockResolvedValue(sampleState({ code: "NEWCOD", name: "Reçue" }));
+      mountHomeView(root, navigate, encoded);
+
+      (root.querySelector("#import-banner-create") as HTMLButtonElement).click();
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
+
+      expect(createList).toHaveBeenCalledWith("Reçue");
+      expect(touchRecentList).toHaveBeenCalledWith("NEWCOD", "Reçue");
+      expect(navigate).toHaveBeenCalledWith(`/l/NEWCOD?import=${encodeURIComponent(encoded)}`);
+    });
+
+    it("un aperçu sans nom utilise le nom de liste par défaut à la création", async () => {
+      const unnamed = encodeListToParam({ name: "", items: [], categories: [], history: [] });
+      createList.mockResolvedValue(sampleState());
+      mountHomeView(root, navigate, unnamed);
+
+      (root.querySelector("#import-banner-create") as HTMLButtonElement).click();
+      await vi.waitFor(() => expect(createList).toHaveBeenCalled());
+
+      expect(createList).toHaveBeenCalledWith("Liste de courses");
+    });
+
+    it("un échec réseau à la création affiche une alerte et réactive le bouton", async () => {
+      createList.mockRejectedValue(new Error("network"));
+      mountHomeView(root, navigate, encoded);
+      const btn = root.querySelector("#import-banner-create") as HTMLButtonElement;
+
+      btn.click();
+      await vi.waitFor(() => expect(alert).toHaveBeenCalled());
+
+      expect(btn.disabled).toBe(false);
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it("« Ignorer » retire la bannière sans rien créer ni naviguer", () => {
+      mountHomeView(root, navigate, encoded);
+
+      (root.querySelector("#import-banner-dismiss") as HTMLButtonElement).click();
+
+      expect(root.textContent).not.toContain("Liste partagée reçue");
+      expect(createList).not.toHaveBeenCalled();
+      expect(navigate).not.toHaveBeenCalled();
+    });
   });
 });

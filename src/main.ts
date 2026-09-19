@@ -1,13 +1,13 @@
 import "./style.css";
 import { applyTheme, getThemePreference } from "./lib/theme";
-import { applyAccessibility, getAccessibilityPreference } from "./lib/accessibility";
+import { applyAccessibilityPreference, getAccessibilityPreference } from "./lib/accessibilityPreference";
 import { appPath, routePath } from "./lib/basePath";
 import { consumeImportParam } from "./lib/compactShare";
 
 // Appliqué avant le premier rendu pour éviter un flash de thème clair suivi
 // d'un bascule sombre si l'utilisateur a choisi un thème manuel.
 applyTheme(getThemePreference());
-applyAccessibility(getAccessibilityPreference());
+applyAccessibilityPreference(getAccessibilityPreference());
 
 const app = document.getElementById("app")!;
 let cleanup: (() => void) | null = null;

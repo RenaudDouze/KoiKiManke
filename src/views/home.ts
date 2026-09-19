@@ -3,7 +3,7 @@ import { getRecentLists, forgetRecentList, touchRecentList, toggleFavoriteList, 
 import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
-import { toggleAccessibilityPreference, getAccessibilityPreference, accessibilityLabel } from "../lib/accessibility";
+import { toggleAccessibilityPreference, getAccessibilityPreference, accessibilityLabel } from "../lib/accessibilityPreference";
 import { PRIVACY_HINT } from "../lib/privacyHint";
 import { decodeListFromParam } from "../lib/compactShare";
 import type { ImportPayload } from "../lib/importExport";

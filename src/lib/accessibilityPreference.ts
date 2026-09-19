@@ -20,7 +20,7 @@ export function getAccessibilityPreference(): AccessibilityPreference {
 // Un seul attribut sur <html> pilote tout : texte agrandi (cascade rem/em,
 // voir style.css — icons.ts définit d'ailleurs les siennes en 1em), contraste
 // renforcé (couleurs de texte/bordures) et transitions/animations coupées.
-export function applyAccessibility(pref: AccessibilityPreference): void {
+export function applyAccessibilityPreference(pref: AccessibilityPreference): void {
   if (pref === "off") document.documentElement.removeAttribute("data-a11y");
   else document.documentElement.setAttribute("data-a11y", pref);
 }
@@ -31,7 +31,7 @@ export function setAccessibilityPreference(pref: AccessibilityPreference): void 
   } catch {
     // storage unavailable, preference just won't persist across reloads
   }
-  applyAccessibility(pref);
+  applyAccessibilityPreference(pref);
 }
 
 export function toggleAccessibilityPreference(): AccessibilityPreference {

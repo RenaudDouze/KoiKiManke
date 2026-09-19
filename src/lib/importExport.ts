@@ -2,12 +2,17 @@ import type { ListState } from "../../shared/types";
 
 export type ImportPayload = Pick<ListState, "name" | "items" | "categories" | "history">;
 
+/** Extrait les champs exportables/partageables d'un état de liste — jamais
+ * `code` (pas un identifiant réutilisable ailleurs) ni `createdAt`/`updatedAt`
+ * (métadonnées de CETTE liste, pas de son contenu). Partagé par l'export
+ * JSON ci-dessous et le lien/QR compact (src/lib/compactShare.ts). */
+export function toImportPayload(state: ListState): ImportPayload {
+  return { name: state.name, categories: state.categories, items: state.items, history: state.history };
+}
+
 export function exportListState(state: ListState): void {
   const payload: ImportPayload & { exportedAt: number } = {
-    name: state.name,
-    categories: state.categories,
-    items: state.items,
-    history: state.history,
+    ...toImportPayload(state),
     exportedAt: Date.now(),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });

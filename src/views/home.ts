@@ -5,11 +5,38 @@ import { icons } from "../lib/icons";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 import { toggleAccessibilityPreference, getAccessibilityPreference, accessibilityLabel } from "../lib/accessibility";
 import { PRIVACY_HINT } from "../lib/privacyHint";
+import { decodeListFromParam } from "../lib/compactShare";
+import type { ImportPayload } from "../lib/importExport";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
-export function mountHomeView(root: HTMLElement, navigate: (path: string) => void): () => void {
+export function mountHomeView(root: HTMLElement, navigate: (path: string) => void, importParam: string | null = null): () => void {
+  // Lien/QR compact ouvert alors qu'aucune liste particulière n'est en cours
+  // (voir src/lib/compactShare.ts, src/main.ts) : pas de liste "actuelle" où
+  // fusionner ici (contrairement à mountListView), donc la seule action
+  // proposée est d'en créer une nouvelle à partir de l'aperçu — l'utilisateur
+  // peut aussi l'ignorer et se comporter comme si le lien n'avait rien eu de
+  // spécial. `null` si le paramètre est absent, invalide ou déjà ignoré.
+  let pendingImport: ImportPayload | null = importParam ? decodeListFromParam(importParam) : null;
+
   render();
+
+  function importBannerHtml(data: ImportPayload): string {
+    return `
+      <section class="card import-banner">
+        <h2>Liste partagée reçue</h2>
+        <p>
+          ${data.items.length} article(s) et ${data.categories.length} catégorie(s)${
+            data.name ? ` — « ${escapeHtml(data.name)} »` : ""
+          }, en aperçu (pas encore une liste synchronisée).
+        </p>
+        <div class="stacked-actions">
+          <button type="button" class="btn primary" id="import-banner-create">Créer une nouvelle liste avec ce contenu</button>
+          <button type="button" class="btn" id="import-banner-dismiss">Ignorer</button>
+        </div>
+      </section>
+    `;
+  }
 
   function recentItemHtml(r: RecentList): string {
     return `
@@ -46,6 +73,8 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
           <p class="tagline">Une liste de courses partagée, synchronisée en direct.</p>
           <p class="tagline privacy-note">${PRIVACY_HINT}</p>
         </header>
+
+        ${pendingImport ? importBannerHtml(pendingImport) : ""}
 
         ${
           recents.length
@@ -155,6 +184,33 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
         if (btn.dataset.code) forgetRecentList(btn.dataset.code);
         render();
       });
+    });
+
+    root.querySelector("#import-banner-create")?.addEventListener("click", async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      btn.disabled = true;
+      try {
+        const created = await createList(pendingImport!.name.trim() || "Liste de courses");
+        touchRecentList(created.code, created.name);
+        // Le paramètre brut (déjà compressé) est reporté dans l'URL de la
+        // nouvelle liste — encodeURIComponent est indispensable ici : la
+        // chaîne compressée par lz-string peut contenir un `+` ou un `$`
+        // (voir compactShare.ts), qui casseraient sinon le paramètre une fois
+        // relu via URLSearchParams (un `+` non encodé y est lu comme un
+        // espace). mountListView décode et propose ensuite la même invite
+        // fusion/remplacement qu'un fichier JSON importé (voir src/main.ts,
+        // src/views/list.ts) — évite de dupliquer ici l'envoi du message
+        // importState, qui ne peut de toute façon se faire qu'une fois le
+        // WebSocket de cette nouvelle liste établi.
+        navigate(`/l/${created.code}?import=${encodeURIComponent(importParam!)}`);
+      } catch {
+        alert("Impossible de créer la liste. Vérifie ta connexion internet.");
+        btn.disabled = false;
+      }
+    });
+    root.querySelector("#import-banner-dismiss")?.addEventListener("click", () => {
+      pendingImport = null;
+      render();
     });
   }
 

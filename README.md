@@ -20,7 +20,10 @@ Cloudflare (Workers + Durable Objects, sans base de données externe).
   historique par liste, utilisé pour des suggestions rapides (chips) et
   l'autocomplétion pendant la saisie.
 - **Import / export** au format JSON, avec fusion ou remplacement à
-  l'import.
+  l'import. Un lien/QR compact permet aussi de partager un instantané figé
+  de la liste (nom, articles, catégories) sans rejoindre le Durable Object
+  en direct : l'ouvrir propose la même fusion/remplacement dans une liste,
+  existante ou nouvelle.
 - **Hors-ligne minimal** : la dernière version connue de chaque liste est
   gardée en cache local, avec reconnexion automatique.
 - **Installable (PWA)** : manifest + service worker, s'ajoute à l'écran

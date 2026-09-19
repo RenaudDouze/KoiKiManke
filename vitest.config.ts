@@ -24,6 +24,7 @@ export default defineConfig({
         "worker/**/*.ts",
         "src/main.ts",
         "src/views/home.ts",
+        "src/views/list.ts",
         "src/lib/color.ts",
         "src/lib/sort.ts",
         "src/lib/id.ts",

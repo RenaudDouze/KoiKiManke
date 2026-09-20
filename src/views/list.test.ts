@@ -70,7 +70,12 @@ type FakeListConnection = InstanceType<typeof FakeListConnection> & {
 vi.mock("../lib/ws", () => ({ ListConnection: FakeListConnection }));
 
 const fetchListState = vi.fn();
-vi.mock("../lib/http", () => ({ fetchListState: (...a: unknown[]) => fetchListState(...a) }));
+const uploadItemPhoto = vi.fn();
+vi.mock("../lib/http", () => ({
+  fetchListState: (...a: unknown[]) => fetchListState(...a),
+  uploadItemPhoto: (...a: unknown[]) => uploadItemPhoto(...a),
+  photoUrl: (code: string, photoId: string) => `/photo/${code}/${photoId}`,
+}));
 
 const openShareModal = vi.fn();
 vi.mock("../components/shareModal", () => ({ openShareModal: (...a: unknown[]) => openShareModal(...a) }));
@@ -947,6 +952,162 @@ describe("mountListView", () => {
       findStartEdit(badge).opts.onCommit("2 kg");
 
       expect(conn.send).toHaveBeenCalledWith({ type: "updateItem", id: "i1", quantity: "2 kg" });
+    });
+
+    it("affiche une icône appareil photo pour un article sans photo", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+      const btn = root.querySelector(".item-photo") as HTMLElement;
+      expect(btn.classList.contains("has-photo")).toBe(false);
+      expect(btn.querySelector("img")).toBeNull();
+    });
+
+    it("affiche la miniature de la photo d'un article qui en a une", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "i1", photoId: "photo1" })] }));
+      const btn = root.querySelector(".item-photo") as HTMLElement;
+      expect(btn.classList.contains("has-photo")).toBe(true);
+      expect(btn.querySelector("img")?.getAttribute("src")).toBe("/photo/ABCDEF/photo1");
+    });
+
+    it("cliquer sur la photo (aucune photo) ouvre le sélecteur de fichier et envoie photoId après upload", async () => {
+      uploadItemPhoto.mockResolvedValue("new-photo-id");
+      const conn = await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+      (root.querySelector(".item-photo") as HTMLButtonElement).click();
+
+      const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(input).not.toBeNull();
+      const file = new File(["fake"], "photo.jpg", { type: "image/jpeg" });
+      Object.defineProperty(input, "files", { value: [file], configurable: true });
+      input.dispatchEvent(new Event("change"));
+
+      await vi.waitFor(() => expect(conn.send).toHaveBeenCalledWith({ type: "updateItem", id: "i1", photoId: "new-photo-id" }));
+      expect(uploadItemPhoto).toHaveBeenCalledWith("ABCDEF", file);
+      // Retiré du DOM une fois le fichier lu, plutôt que laissé traîner.
+      expect(document.body.contains(input)).toBe(false);
+    });
+
+    it("annuler la sélection de fichier (aucun fichier choisi) ne fait rien", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+      (root.querySelector(".item-photo") as HTMLButtonElement).click();
+      const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+      Object.defineProperty(input, "files", { value: [], configurable: true });
+      input.dispatchEvent(new Event("change"));
+
+      expect(uploadItemPhoto).not.toHaveBeenCalled();
+    });
+
+    it("refuse un fichier d'un type non pris en charge sans l'envoyer", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+      (root.querySelector(".item-photo") as HTMLButtonElement).click();
+      const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(["fake"], "doc.pdf", { type: "application/pdf" });
+      Object.defineProperty(input, "files", { value: [file], configurable: true });
+      input.dispatchEvent(new Event("change"));
+
+      expect(uploadItemPhoto).not.toHaveBeenCalled();
+      expect(document.querySelector(".toast")?.textContent).toBe("Format de photo non pris en charge.");
+    });
+
+    it("refuse un fichier trop volumineux sans l'envoyer", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+      (root.querySelector(".item-photo") as HTMLButtonElement).click();
+      const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(["fake"], "photo.jpg", { type: "image/jpeg" });
+      Object.defineProperty(file, "size", { value: 9 * 1024 * 1024, configurable: true });
+      Object.defineProperty(input, "files", { value: [file], configurable: true });
+      input.dispatchEvent(new Event("change"));
+
+      expect(uploadItemPhoto).not.toHaveBeenCalled();
+      expect(document.querySelector(".toast")?.textContent).toBe("Photo trop volumineuse.");
+    });
+
+    it("affiche une erreur si l'envoi de la photo échoue", async () => {
+      uploadItemPhoto.mockRejectedValue(new Error("network"));
+      const conn = await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+      (root.querySelector(".item-photo") as HTMLButtonElement).click();
+      const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(["fake"], "photo.jpg", { type: "image/jpeg" });
+      Object.defineProperty(input, "files", { value: [file], configurable: true });
+      input.dispatchEvent(new Event("change"));
+
+      await vi.waitFor(() => expect(document.querySelector(".toast")).not.toBeNull());
+      expect(document.querySelector(".toast")?.textContent).toBe("Impossible d'envoyer la photo.");
+      expect(conn.send).not.toHaveBeenCalledWith(expect.objectContaining({ type: "updateItem", photoId: expect.anything() }));
+    });
+
+    it("cliquer sur la photo d'un article introuvable (retiré entre-temps) ne fait rien", async () => {
+      const conn = await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+      const btn = root.querySelector(".item-photo") as HTMLButtonElement;
+      conn.emitState(sampleState({ items: [] }));
+
+      expect(() => btn.click()).not.toThrow();
+      expect(uploadItemPhoto).not.toHaveBeenCalled();
+      expect(document.body.querySelector('input[type="file"]')).toBeNull();
+    });
+
+    describe("visionneuse de photo", () => {
+      it("s'ouvre au clic sur une photo existante et affiche l'image en grand", async () => {
+        await mount(sampleState({ items: [makeItem({ id: "i1", name: "Pommes", photoId: "photo1" })] }));
+        (root.querySelector(".item-photo") as HTMLButtonElement).click();
+
+        const modal = document.querySelector(".photo-viewer-modal");
+        expect(modal).not.toBeNull();
+        expect(modal!.querySelector("img")?.getAttribute("src")).toBe("/photo/ABCDEF/photo1");
+        expect(modal!.querySelector("h2")?.textContent).toBe("Pommes");
+      });
+
+      it("« Remplacer la photo » ferme la visionneuse et ouvre le sélecteur de fichier", async () => {
+        await mount(sampleState({ items: [makeItem({ id: "i1", photoId: "photo1" })] }));
+        (root.querySelector(".item-photo") as HTMLButtonElement).click();
+        (document.querySelector("#photo-replace") as HTMLButtonElement).click();
+
+        expect(document.querySelector(".photo-viewer-modal")).toBeNull();
+        expect(document.body.querySelector('input[type="file"]')).not.toBeNull();
+      });
+
+      it("« Supprimer la photo » envoie photoId: null et ferme la visionneuse", async () => {
+        const conn = await mount(sampleState({ items: [makeItem({ id: "i1", photoId: "photo1" })] }));
+        (root.querySelector(".item-photo") as HTMLButtonElement).click();
+        (document.querySelector("#photo-remove") as HTMLButtonElement).click();
+
+        expect(conn.send).toHaveBeenCalledWith({ type: "updateItem", id: "i1", photoId: null });
+        expect(document.querySelector(".photo-viewer-modal")).toBeNull();
+      });
+
+      it("« Fermer » ferme la visionneuse sans envoyer de message", async () => {
+        const conn = await mount(sampleState({ items: [makeItem({ id: "i1", photoId: "photo1" })] }));
+        (root.querySelector(".item-photo") as HTMLButtonElement).click();
+        (document.querySelector("#photo-cancel") as HTMLButtonElement).click();
+
+        expect(document.querySelector(".photo-viewer-modal")).toBeNull();
+        expect(conn.send).not.toHaveBeenCalled();
+      });
+
+      it("le bouton de fermeture (croix) ferme la visionneuse", async () => {
+        await mount(sampleState({ items: [makeItem({ id: "i1", photoId: "photo1" })] }));
+        (root.querySelector(".item-photo") as HTMLButtonElement).click();
+        (document.querySelector(".photo-viewer-modal .modal-close") as HTMLButtonElement).click();
+
+        expect(document.querySelector(".photo-viewer-modal")).toBeNull();
+      });
+
+      it("cliquer en dehors de la modale la ferme", async () => {
+        await mount(sampleState({ items: [makeItem({ id: "i1", photoId: "photo1" })] }));
+        (root.querySelector(".item-photo") as HTMLButtonElement).click();
+        (document.querySelector(".modal-overlay") as HTMLElement).dispatchEvent(new Event("click"));
+
+        expect(document.querySelector(".photo-viewer-modal")).toBeNull();
+      });
+
+      it("Échap ferme la visionneuse, une autre touche non", async () => {
+        await mount(sampleState({ items: [makeItem({ id: "i1", photoId: "photo1" })] }));
+        (root.querySelector(".item-photo") as HTMLButtonElement).click();
+
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
+        expect(document.querySelector(".photo-viewer-modal")).not.toBeNull();
+
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        expect(document.querySelector(".photo-viewer-modal")).toBeNull();
+      });
     });
 
     it("renommer une catégorie depuis la liste envoie renameCategory", async () => {

@@ -20,7 +20,7 @@ export default {
     // ajouter un fichier à `mutate` sans l'ajouter ici ferait survivre tous
     // ses mutants faute de test lancé contre eux.
     command:
-      "npx vitest run shared/quantity.test.ts shared/historyKey.test.ts worker/index.test.ts worker/presence.test.ts worker/crypto.test.ts worker/reducer.test.ts src/lib/color.test.ts src/lib/sort.test.ts src/lib/compactShare.test.ts",
+      "npx vitest run shared/quantity.test.ts shared/historyKey.test.ts shared/photo.test.ts worker/index.test.ts worker/presence.test.ts worker/crypto.test.ts worker/reducer.test.ts worker/photos.test.ts src/lib/color.test.ts src/lib/sort.test.ts src/lib/compactShare.test.ts",
   },
   coverageAnalysis: "off",
   // Stryker's tsconfig-rewriting preprocessor (needed to relax the sandbox's

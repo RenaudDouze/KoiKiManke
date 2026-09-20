@@ -36,6 +36,7 @@ export default defineConfig({
         "src/lib/icons.ts",
         "src/components/qr.ts",
         "src/components/shareModal.ts",
+        "src/components/accessibilityModal.ts",
         "src/lib/theme.ts",
         "src/lib/accessibilityPreference.ts",
         "src/lib/itemSortPreference.ts",

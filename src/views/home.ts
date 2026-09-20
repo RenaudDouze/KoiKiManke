@@ -3,7 +3,7 @@ import { getRecentLists, forgetRecentList, touchRecentList, toggleFavoriteList, 
 import { escapeHtml } from "../lib/dom";
 import { icons } from "../lib/icons";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
-import { toggleAccessibilityPreference, getAccessibilityPreference, accessibilityLabel } from "../lib/accessibilityPreference";
+import { openAccessibilityModal } from "../components/accessibilityModal";
 import { PRIVACY_HINT } from "../lib/privacyHint";
 import { decodeListFromParam } from "../lib/compactShare";
 import type { ImportPayload } from "../lib/importExport";
@@ -56,11 +56,10 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
     const favorites = recents.filter((r) => r.favorite);
     const others = recents.filter((r) => !r.favorite);
     const theme = getThemePreference();
-    const a11y = getAccessibilityPreference();
     root.innerHTML = `
       <div class="home">
         <div class="home-toggles">
-          <button type="button" class="icon-btn" id="a11y-toggle" aria-label="Accessibilité : ${accessibilityLabel(a11y)}" title="Accessibilité : ${accessibilityLabel(a11y)}" aria-pressed="${a11y === "on"}">
+          <button type="button" class="icon-btn" id="a11y-toggle" aria-label="Accessibilité" title="Accessibilité">
             ${icons.accessibility}
           </button>
           <button type="button" class="icon-btn" id="theme-toggle" aria-label="Thème : ${themeLabel(theme)}" title="Thème : ${themeLabel(theme)}">
@@ -120,10 +119,7 @@ export function mountHomeView(root: HTMLElement, navigate: (path: string) => voi
       cycleThemePreference();
       render();
     });
-    root.querySelector("#a11y-toggle")?.addEventListener("click", () => {
-      toggleAccessibilityPreference();
-      render();
-    });
+    root.querySelector("#a11y-toggle")?.addEventListener("click", openAccessibilityModal);
 
     root.querySelector("#create-form")?.addEventListener("submit", async (e) => {
       e.preventDefault();

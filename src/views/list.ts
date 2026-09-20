@@ -18,7 +18,7 @@ import { trapFocus } from "../lib/focusTrap";
 import { resolveCategoryHue } from "../lib/color";
 import { alnumCompare } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
-import { toggleAccessibilityPreference, getAccessibilityPreference, accessibilityLabel } from "../lib/accessibilityPreference";
+import { openAccessibilityModal } from "../components/accessibilityModal";
 import { cycleItemSortPreference, getItemSortPreference, itemSortLabel } from "../lib/itemSortPreference";
 import { getHideCheckedPreference, toggleHideCheckedPreference } from "../lib/hideCheckedPreference";
 import { getDeviceName } from "../lib/presence";
@@ -425,10 +425,7 @@ export function mountListView(
       cycleThemePreference();
       updateThemeMenuItem(e.currentTarget as HTMLElement);
     });
-    panel.querySelector('[data-action="accessibility"]')!.addEventListener("click", (e) => {
-      toggleAccessibilityPreference();
-      updateAccessibilityMenuItem(e.currentTarget as HTMLElement);
-    });
+    panel.querySelector('[data-action="accessibility"]')!.addEventListener("click", openAccessibilityModal);
     panel.querySelector('[data-action="item-sort"]')!.addEventListener("click", (e) => {
       cycleItemSortPreference();
       updateItemSortMenuItem(e.currentTarget as HTMLElement);
@@ -1293,7 +1290,7 @@ export function mountListView(
           <div class="menu-panel" id="menu-panel" hidden>
             <button type="button" data-action="share"><span class="menu-item-icon">${icons.share}</span>Partager</button>
             <button type="button" data-action="theme">${themeMenuHtml(getThemePreference())}</button>
-            <button type="button" data-action="accessibility">${accessibilityMenuHtml(getAccessibilityPreference())}</button>
+            <button type="button" data-action="accessibility"><span class="menu-item-icon">${icons.accessibility}</span>Accessibilité</button>
             <button type="button" data-action="item-sort">${itemSortMenuHtml(getItemSortPreference())}</button>
             <button type="button" data-action="notifications">${notificationsMenuHtml(getNotificationStatus())}</button>
             <button type="button" data-action="manage-categories"><span class="menu-item-icon">${icons.tag}</span>Gérer les catégories</button>
@@ -1337,14 +1334,6 @@ export function mountListView(
 
   function updateThemeMenuItem(button: HTMLElement): void {
     button.innerHTML = themeMenuHtml(getThemePreference());
-  }
-
-  function accessibilityMenuHtml(pref: ReturnType<typeof getAccessibilityPreference>): string {
-    return `<span class="menu-item-icon">${icons.accessibility}</span>Accessibilité : ${accessibilityLabel(pref)}`;
-  }
-
-  function updateAccessibilityMenuItem(button: HTMLElement): void {
-    button.innerHTML = accessibilityMenuHtml(getAccessibilityPreference());
   }
 
   function itemSortMenuHtml(pref: ReturnType<typeof getItemSortPreference>): string {

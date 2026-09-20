@@ -38,7 +38,7 @@
   /* Plus spécifique que le bloc clair ci-dessous ([data-theme] en plus,
      voir la sélection combinée) donc gagne bien quand le système est en
      sombre sans thème explicite. */
-  :root:not([data-theme="light"])[data-a11y="on"] {
+  :root:not([data-theme="light"])[data-high-contrast] {
     --text: #ffffff;
     --text-muted: #d8d8d8;
     --border: #9a9a9a;
@@ -63,45 +63,52 @@
   color-scheme: dark;
 }
 
-:root[data-theme="dark"][data-a11y="on"] {
+:root[data-theme="dark"][data-high-contrast] {
   --text: #ffffff;
   --text-muted: #d8d8d8;
   --border: #9a9a9a;
 }
 
-/* Mode accessibilité : texte agrandi, contraste renforcé, animations
-   coupées. Le reste de style.css est déjà exprimé en rem/em (icônes
-   comprises, voir icons.ts) donc augmenter la taille de police racine fait
-   grossir en cascade textes, icônes, paddings et espacements, sans devoir
-   reprendre chaque règle. Les couleurs ci-dessous sont pour le thème clair —
-   les deux blocs sombres ci-dessus, plus spécifiques, prennent le dessus
-   quand un thème sombre est actif. */
-:root[data-a11y="on"] {
+/* Mode accessibilité : trois réglages indépendants (voir
+   accessibilityPreference.ts/accessibilityModal.ts), chacun un attribut
+   booléen sur <html>, activables séparément selon le besoin réel de la
+   personne plutôt qu'un seul bouton qui change tout à la fois. */
+
+/* Texte plus grand : le reste de style.css est déjà exprimé en rem/em
+   (icônes comprises, voir icons.ts) donc augmenter la taille de police
+   racine fait grossir en cascade textes, icônes, paddings et espacements,
+   sans devoir reprendre chaque règle — avec des marges latérales
+   volontairement réduites en contrepartie sur les conteneurs principaux
+   ci-dessous pour ne pas perdre en largeur utile. */
+:root[data-large-text] {
   font-size: 125%;
+}
+
+/* Renforce le contraste texte/fond indépendamment du thème clair/sombre
+   actif. Les couleurs ci-dessous sont pour le thème clair — les deux blocs
+   sombres ci-dessus, plus spécifiques, prennent le dessus quand un thème
+   sombre est actif. */
+:root[data-high-contrast] {
   --text: #000000;
   --text-muted: #333333;
   --border: #555555;
 }
 
-/* Coupe transitions et animations partout, y compris celles posées en
-   ligne par le JS (swipe, toasts) : une règle !important d'une feuille de
-   style l'emporte sur un style inline non-important. */
-:root[data-a11y="on"] *,
-:root[data-a11y="on"] *::before,
-:root[data-a11y="on"] *::after {
-  transition-duration: 0s !important;
-  animation-duration: 0s !important;
-  scroll-behavior: auto !important;
-}
-
-:root[data-a11y="on"] input:focus,
-:root[data-a11y="on"] select:focus,
-:root[data-a11y="on"] button:focus-visible {
+:root[data-high-contrast] input:focus,
+:root[data-high-contrast] select:focus,
+:root[data-high-contrast] button:focus-visible {
   outline-width: 3px;
 }
 
-#a11y-toggle[aria-pressed="true"] {
-  color: var(--primary);
+/* Coupe transitions et animations partout, y compris celles posées en
+   ligne par le JS (swipe, toasts) : une règle !important d'une feuille de
+   style l'emporte sur un style inline non-important. */
+:root[data-reduce-motion] *,
+:root[data-reduce-motion] *::before,
+:root[data-reduce-motion] *::after {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  scroll-behavior: auto !important;
 }
 
 * {
@@ -207,7 +214,7 @@ button:focus-visible {
 /* Les marges latérales ne doivent pas grossir avec le texte : sur un écran
    étroit, ça grignote justement la largeur dont le contenu a le plus besoin
    une fois agrandi. On les réduit plutôt, sous la normale. */
-:root[data-a11y="on"] .home {
+:root[data-large-text] .home {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
@@ -265,7 +272,7 @@ button:focus-visible {
   box-shadow: var(--shadow);
 }
 
-:root[data-a11y="on"] .card {
+:root[data-large-text] .card {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
@@ -282,11 +289,11 @@ button:focus-visible {
 
 /* En grand texte, un bouton à largeur fixe à côté d'un champ qui rétrécit
    finit par tronquer son placeholder — mieux vaut les empiler. */
-:root[data-a11y="on"] .row {
+:root[data-large-text] .row {
   flex-wrap: wrap;
 }
 
-:root[data-a11y="on"] .row input {
+:root[data-large-text] .row input {
   flex-basis: 100%;
 }
 
@@ -373,7 +380,7 @@ button:focus-visible {
   text-align: center;
 }
 
-:root[data-a11y="on"] .list-privacy-note {
+:root[data-large-text] .list-privacy-note {
   padding-left: 0.4rem;
   padding-right: 0.4rem;
 }
@@ -404,13 +411,13 @@ button:focus-visible {
 
 /* En grand texte, la rangée d'icônes de droite ne tient plus à côté du nom
    sans l'écraser à quelques caractères — on la laisse passer à la ligne. */
-:root[data-a11y="on"] .list-header {
+:root[data-large-text] .list-header {
   flex-wrap: wrap;
   padding-left: 0.4rem;
   padding-right: 0.4rem;
 }
 
-:root[data-a11y="on"] .list-title {
+:root[data-large-text] .list-title {
   min-width: 8rem;
 }
 
@@ -445,13 +452,13 @@ button:focus-visible {
 /* Même logique que les autres agrandissements ciblés du mode accessibilité
    ci-dessus (.list-title, .add-input-wrap...) : le point ne grossit pas
    avec la police puisqu'il n'est pas exprimé en em/rem. */
-:root[data-a11y="on"] .conn-dot {
+:root[data-large-text] .conn-dot {
   width: 14px;
   height: 14px;
   box-shadow: 0 0 0 4px color-mix(in srgb, #c9a227 30%, transparent);
 }
 
-:root[data-a11y="on"] .conn-dot.online {
+:root[data-large-text] .conn-dot.online {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
@@ -524,7 +531,7 @@ button:focus-visible {
   position: relative;
 }
 
-:root[data-a11y="on"] .add-form {
+:root[data-large-text] .add-form {
   padding-left: 0.4rem;
   padding-right: 0.4rem;
 }
@@ -549,15 +556,15 @@ button:focus-visible {
 
 /* Même souci qu'avec .add-row : le champ de saisie ne doit pas finir écrasé
    entre le sélecteur de catégorie et le bouton d'ajout. */
-:root[data-a11y="on"] .add-row {
+:root[data-large-text] .add-row {
   flex-wrap: wrap;
 }
 
-:root[data-a11y="on"] .add-input-wrap {
+:root[data-large-text] .add-input-wrap {
   flex-basis: 100%;
 }
 
-:root[data-a11y="on"] #add-category {
+:root[data-large-text] #add-category {
   flex: 1;
   max-width: none;
 }
@@ -658,7 +665,7 @@ button:focus-visible {
   flex: 1;
 }
 
-:root[data-a11y="on"] .categories {
+:root[data-large-text] .categories {
   padding-left: 0.3rem;
   padding-right: 0.3rem;
 }
@@ -923,7 +930,7 @@ button:focus-visible {
   padding: 3rem 1rem;
 }
 
-:root[data-a11y="on"] .empty-state {
+:root[data-large-text] .empty-state {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
@@ -985,6 +992,46 @@ button:focus-visible {
   position: absolute;
   top: 0.8rem;
   right: 0.8rem;
+}
+
+.accessibility-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.accessibility-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.6em 0.4em;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.accessibility-option:hover {
+  background: var(--checked-bg);
+}
+
+.accessibility-option input {
+  margin-top: 0.3em;
+  flex-shrink: 0;
+  width: 1.2em;
+  height: 1.2em;
+  accent-color: var(--primary);
+}
+
+.accessibility-option span {
+  display: flex;
+  flex-direction: column;
+}
+
+.accessibility-option small {
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 .share-code {

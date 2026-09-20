@@ -37,9 +37,10 @@ Cloudflare (Workers + Durable Objects, sans base de données externe).
   bloquante.
 - **Thème clair/sombre/auto**, au choix (bouton dans le menu ⋮ et sur
   l'accueil), en plus de la détection système par défaut.
-- **Mode accessibilité** : un bouton (menu ⋮ et accueil) grossit d'un coup
-  textes, icônes et zones cliquables, renforce le contraste des textes et
-  bordures, et coupe transitions/animations.
+- **Mode accessibilité** : une modale dédiée (menu ⋮ et accueil) propose
+  trois réglages indépendants, activables séparément — texte/icônes/zones
+  cliquables plus grands, contraste renforcé, transitions/animations
+  coupées.
 - **Recherche** rapide des articles par nom.
 - **Petite célébration** quand le dernier article est coché.
 - **Couleur automatique par catégorie** et icônes cohérentes (pas d'emoji

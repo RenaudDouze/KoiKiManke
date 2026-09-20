@@ -23,6 +23,9 @@ vi.mock("../lib/storage", () => ({
   toggleFavoriteList: (...args: unknown[]) => toggleFavoriteList(...args),
 }));
 
+const openAccessibilityModal = vi.fn();
+vi.mock("../components/accessibilityModal", () => ({ openAccessibilityModal: () => openAccessibilityModal() }));
+
 function sampleState(overrides: Partial<ListState> = {}): ListState {
   return { code: "ABCDEF", name: "Courses", items: [], categories: [], history: [], createdAt: 0, updatedAt: 0, ...overrides };
 }
@@ -34,7 +37,9 @@ describe("mountHomeView", () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.removeAttribute("data-theme");
-    document.documentElement.removeAttribute("data-a11y");
+    document.documentElement.removeAttribute("data-large-text");
+    document.documentElement.removeAttribute("data-high-contrast");
+    document.documentElement.removeAttribute("data-reduce-motion");
     document.body.innerHTML = "";
     root = document.createElement("div");
     document.body.appendChild(root);
@@ -101,12 +106,12 @@ describe("mountHomeView", () => {
     expect(after).not.toBe(before);
   });
 
-  it("le bouton d'accessibilité bascule la préférence et se ré-affiche", () => {
+  it("le bouton d'accessibilité ouvre la modale dédiée", () => {
     mountHomeView(root, navigate);
 
     (root.querySelector("#a11y-toggle") as HTMLButtonElement).click();
 
-    expect(root.querySelector("#a11y-toggle")?.getAttribute("aria-pressed")).toBe("true");
+    expect(openAccessibilityModal).toHaveBeenCalledTimes(1);
   });
 
   it("créer une liste : appelle createList, mémorise la liste puis navigue", async () => {

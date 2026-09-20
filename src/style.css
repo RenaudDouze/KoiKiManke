@@ -812,40 +812,28 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-/* Petite barre verticale de couleur (gris/bleu/rouge selon la priorité) :
-   volontairement pas une pastille ronde, pour ne pas se confondre avec
-   .category-dot (le rond de couleur des catégories, dans l'en-tête). La
-   zone cliquable dépasse largement le trait visible (::before), pour
-   rester facile à toucher malgré sa finesse. */
+/* Une icône par niveau (chevron bas / trait / triangle plein, voir
+   icons.ts), plus lisible qu'une simple barre de couleur : la forme porte
+   l'information, la couleur ne fait que la renforcer (accessible même sans
+   distinguer les couleurs). */
 .item-priority {
-  position: relative;
   flex-shrink: 0;
-  width: 4px;
-  height: 16px;
-  padding: 0;
-  border: none;
-  border-radius: 2px;
-  cursor: pointer;
-  background: var(--priority-low);
-}
-
-.item-priority::before {
-  content: "";
-  position: absolute;
-  inset: -8px -10px;
+  font-size: 0.9rem;
+  padding: 0.3em;
+  color: var(--priority-low);
 }
 
 .item-priority[data-priority="0"] {
-  background: var(--priority-low);
-  opacity: 0.55;
+  color: var(--priority-low);
+  opacity: 0.75;
 }
 
 .item-priority[data-priority="1"] {
-  background: var(--priority-normal);
+  color: var(--priority-normal);
 }
 
 .item-priority[data-priority="2"] {
-  background: var(--danger);
+  color: var(--danger);
 }
 
 .item-delete {

@@ -50,6 +50,10 @@ const CATEGORY_COLOR_HUES: readonly { hue: number; name: string }[] = [
 // Item sans priority explicite (créé avant l'introduction du champ) :
 // traité comme Normale, pour ne rien changer à l'ordre existant.
 const PRIORITY_LABELS = ["Basse", "Normale", "Haute"] as const;
+// Une forme différente par niveau (voir icons.ts), pas seulement une couleur
+// de fond comme avant : plus lisible d'un coup d'œil et ne dépend pas de la
+// perception des couleurs pour distinguer les trois niveaux.
+const PRIORITY_ICONS = [icons.priorityLow, icons.priorityNormal, icons.priorityHigh] as const;
 // Ne fait pas confiance à item.priority au-delà de sa forme réelle : le
 // serveur le valide désormais (voir worker/reducer.ts), mais data-priority
 // n'est pas échappé à l'affichage ci-dessous (c'est un simple entier), donc
@@ -1238,7 +1242,7 @@ export function mountListView(
         <div class="item-content">
           <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
           <input type="checkbox" class="item-check" data-id="${id}" ${item.checked ? "checked" : ""} />
-          <button class="item-priority" data-action="cycle-priority" data-id="${id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)"></button>
+          <button class="icon-btn item-priority" data-action="cycle-priority" data-id="${id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)">${PRIORITY_ICONS[priority]}</button>
           <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${id}">${escapeHtml(item.quantity) || "+"}</span>
           <span class="item-name" data-id="${id}">${escapeHtml(item.name)}</span>
           ${

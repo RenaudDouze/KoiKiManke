@@ -3,6 +3,7 @@ import type { ListState, ClientMessage, ServerMessage } from "../shared/types";
 import { applyMessage } from "./reducer";
 import { sanitizeParticipantName } from "./presence";
 import { encryptJson, decryptJson, type EncryptedPayload } from "./crypto";
+import { photoObjectKey } from "./photos";
 
 interface ConnectionAttachment {
   name: string;
@@ -10,6 +11,7 @@ interface ConnectionAttachment {
 
 interface Env {
   LIST_ROOM: DurableObjectNamespace<ListRoom>;
+  PHOTOS: R2Bucket;
 }
 
 const STORAGE_KEY = "state";
@@ -93,6 +95,15 @@ export class ListRoom extends DurableObject<Env> {
     }
 
     try {
+      // Même référence d'objet avant/après applyMessage (qui mute l'item en
+      // place plutôt que de le remplacer) : relire targetItem.photoId après
+      // reflète la valeur réellement retenue par le reducer (un id mal formé
+      // envoyé par le client y est ignoré, voir worker/reducer.ts) — comparer
+      // au msg.photoId brut aurait à tort déclenché un nettoyage pour un
+      // champ non touché (msg.photoId undefined) ou un id rejeté.
+      const targetItem = msg.type === "updateItem" ? this.listState.items.find((i) => i.id === msg.id) : undefined;
+      const previousPhotoId = targetItem?.photoId;
+
       applyMessage(this.listState, msg);
       // Diffuse depuis l'état déjà muté en mémoire avant d'attendre la
       // persistance (chiffrement + écriture de la liste entière) : les autres
@@ -100,6 +111,19 @@ export class ListRoom extends DurableObject<Env> {
       // critique de la synchronisation temps réel.
       this.broadcast();
       await this.persist();
+
+      // Ne nettoie que sur un remplacement/retrait effectif via updateItem —
+      // jamais sur deleteItem/clearChecked/deleteCategory (dont l'item peut
+      // resurgir via restoreItems, la pile d'annulation côté client, voir
+      // src/views/list.ts) ni sur importState (déjà dépourvu de photoId, voir
+      // sanitizeImportedItem dans reducer.ts) : supprimer l'objet R2 dans ces
+      // cas casserait une photo qu'un "Annuler" est censé restaurer telle
+      // quelle. Contrepartie assumée : un item supprimé sans être annulé
+      // laisse sa photo orpheline dans le bucket (stockage bon marché, pas de
+      // sweep périodique pour l'instant).
+      if (targetItem && previousPhotoId && previousPhotoId !== targetItem.photoId) {
+        await this.env.PHOTOS.delete(photoObjectKey(this.listState.code, previousPhotoId)).catch(() => {});
+      }
     } catch (err) {
       ws.send(
         JSON.stringify({ type: "error", message: err instanceof Error ? err.message : "Erreur inconnue" } satisfies ServerMessage),

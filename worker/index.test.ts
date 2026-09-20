@@ -36,11 +36,44 @@ function pathOf(input: FetchArg): string {
   return new URL(typeof input === "string" ? input : input.url).pathname;
 }
 
-function makeEnv(listRoomHandler: FakeHandler, assetsFetch?: (request: Request) => Promise<Response> | Response): Env {
+// Assez du binding R2 réel pour exercer les routes /photos : un Map en
+// mémoire indexée par clé d'objet, avec juste ce que worker/index.ts lit
+// (body/httpMetadata.contentType) ou écrit (put).
+function makeR2Bucket(initial: Record<string, { body: string; contentType: string }> = {}): Env["PHOTOS"] {
+  const store = new Map(Object.entries(initial));
+  return {
+    put: vi.fn(async (key: string, value: ArrayBuffer, options?: { httpMetadata?: { contentType?: string } }) => {
+      const text = new TextDecoder().decode(value);
+      store.set(key, { body: text, contentType: options?.httpMetadata?.contentType ?? "" });
+    }),
+    get: vi.fn(async (key: string) => {
+      const entry = store.get(key);
+      if (!entry) return null;
+      return {
+        body: new Response(entry.body).body,
+        httpMetadata: { contentType: entry.contentType },
+      };
+    }),
+  } as unknown as Env["PHOTOS"];
+}
+
+function makeEnv(
+  listRoomHandler: FakeHandler,
+  assetsFetch?: (request: Request) => Promise<Response> | Response,
+  photos?: Env["PHOTOS"],
+): Env {
   return {
     LIST_ROOM: makeListRoomNamespace(listRoomHandler),
+    PHOTOS: photos ?? makeR2Bucket(),
     ASSETS: { fetch: assetsFetch ?? (() => new Response("asset", { status: 200 })) },
   } as unknown as Env;
+}
+
+function listExistsHandler(): FakeHandler {
+  return (_code, input) =>
+    pathOf(input) === "/state"
+      ? Response.json({ code: "ABCDEF", name: "Courses", items: [], categories: [], history: [], createdAt: 0, updatedAt: 0 })
+      : new Response("unused", { status: 200 });
 }
 
 describe("POST /api/lists (création)", () => {
@@ -182,6 +215,123 @@ describe("CORS (client cross-origine, ex: GitHub Pages)", () => {
   it("ajoute les en-têtes CORS au 404 générique de l'API", async () => {
     const env = makeEnv(() => new Response("not found", { status: 404 }));
     const res = await worker.fetch(req("https://app.example/api/nope"), env);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+});
+
+describe("POST /api/lists/:code/photos (upload)", () => {
+  it("stocke la photo dans R2 et renvoie son id", async () => {
+    const photos = makeR2Bucket();
+    const env = makeEnv(listExistsHandler(), undefined, photos);
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/abcdef/photos", {
+        method: "POST",
+        headers: { "content-type": "image/png" },
+        body: new Uint8Array([1, 2, 3]),
+      }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = await readJson(res);
+    expect(typeof body.id).toBe("string");
+    expect(photos.put).toHaveBeenCalledWith(
+      `ABCDEF/${body.id}`,
+      expect.anything(),
+      expect.objectContaining({ httpMetadata: { contentType: "image/png" } }),
+    );
+  });
+
+  it("renvoie 404 si la liste n'existe pas", async () => {
+    const handler: FakeHandler = () => new Response("not found", { status: 404 });
+    const env = makeEnv(handler);
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/abcdef/photos", { method: "POST", headers: { "content-type": "image/png" }, body: new Uint8Array([1]) }),
+      env,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("renvoie 415 pour un type MIME non autorisé", async () => {
+    const env = makeEnv(listExistsHandler());
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/abcdef/photos", {
+        method: "POST",
+        headers: { "content-type": "application/pdf" },
+        body: new Uint8Array([1]),
+      }),
+      env,
+    );
+    expect(res.status).toBe(415);
+  });
+
+  it("renvoie 413 pour un corps vide", async () => {
+    const env = makeEnv(listExistsHandler());
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/abcdef/photos", { method: "POST", headers: { "content-type": "image/png" }, body: new Uint8Array([]) }),
+      env,
+    );
+    expect(res.status).toBe(413);
+  });
+
+  it("renvoie 413 au-delà de la taille maximale autorisée", async () => {
+    const env = makeEnv(listExistsHandler());
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/abcdef/photos", {
+        method: "POST",
+        headers: { "content-type": "image/png" },
+        body: new Uint8Array(9 * 1024 * 1024),
+      }),
+      env,
+    );
+    expect(res.status).toBe(413);
+  });
+
+  it("ajoute les en-têtes CORS à la réponse", async () => {
+    const env = makeEnv(listExistsHandler());
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/abcdef/photos", { method: "POST", headers: { "content-type": "image/png" }, body: new Uint8Array([1]) }),
+      env,
+    );
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+});
+
+describe("GET /api/lists/:code/photos/:photoId (lecture)", () => {
+  it("renvoie les octets stockés avec leur content-type", async () => {
+    const photos = makeR2Bucket({ "ABCDEF/photo1": { body: "fake-bytes", contentType: "image/webp" } });
+    const env = makeEnv(() => new Response("unused"), undefined, photos);
+    const res = await worker.fetch(req("https://app.example/api/lists/abcdef/photos/photo1"), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/webp");
+    expect(await res.text()).toBe("fake-bytes");
+  });
+
+  it("pose un cache-control long et immuable", async () => {
+    const photos = makeR2Bucket({ "ABCDEF/photo1": { body: "x", contentType: "image/png" } });
+    const env = makeEnv(() => new Response("unused"), undefined, photos);
+    const res = await worker.fetch(req("https://app.example/api/lists/abcdef/photos/photo1"), env);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+  });
+
+  it("retombe sur application/octet-stream si l'objet n'a pas de content-type stocké", async () => {
+    const photos = {
+      get: vi.fn(async () => ({ body: new Response("x").body, httpMetadata: undefined })),
+    } as unknown as Env["PHOTOS"];
+    const env = makeEnv(() => new Response("unused"), undefined, photos);
+    const res = await worker.fetch(req("https://app.example/api/lists/abcdef/photos/photo1"), env);
+    expect(res.headers.get("content-type")).toBe("application/octet-stream");
+  });
+
+  it("renvoie 404 si l'objet n'existe pas dans R2", async () => {
+    const env = makeEnv(() => new Response("unused"));
+    const res = await worker.fetch(req("https://app.example/api/lists/abcdef/photos/ghost"), env);
+    expect(res.status).toBe(404);
+  });
+
+  it("ajoute les en-têtes CORS à la réponse", async () => {
+    const photos = makeR2Bucket({ "ABCDEF/photo1": { body: "x", contentType: "image/png" } });
+    const env = makeEnv(() => new Response("unused"), undefined, photos);
+    const res = await worker.fetch(req("https://app.example/api/lists/abcdef/photos/photo1"), env);
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
 });

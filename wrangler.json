@@ -16,6 +16,12 @@
       }
     ]
   },
+  "r2_buckets": [
+    {
+      "binding": "PHOTOS",
+      "bucket_name": "koikimanke-photos"
+    }
+  ],
   "migrations": [
     {
       "tag": "v1",

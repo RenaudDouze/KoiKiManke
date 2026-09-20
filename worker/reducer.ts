@@ -5,6 +5,7 @@
 import type { ListState, ClientMessage, Item, Category, Priority } from "../shared/types";
 import { parseFreeText } from "../shared/quantity";
 import { historyKey } from "../shared/historyKey";
+import { isSafePhotoId } from "./photos";
 
 export const MAX_HISTORY = 300;
 
@@ -46,6 +47,12 @@ function sanitizeImportedItem(item: Item): Item {
   safe.name = safeString(safe.name, MAX_NAME_LENGTH);
   safe.quantity = safeString(safe.quantity, MAX_QUANTITY_LENGTH);
   if (safe.priority !== undefined && !isPriority(safe.priority)) delete safe.priority;
+  // Un photoId ne nomme un objet R2 réel que dans la liste qui l'a
+  // uploadé (voir worker/photos.ts) : un fichier exporté/un lien compact
+  // (potentiellement importé dans une tout autre liste, voir
+  // src/lib/compactShare.ts) ne peut jamais en porter un valide pour sa
+  // destination, donc toujours retiré plutôt que revalidé.
+  delete safe.photoId;
   return safe;
 }
 
@@ -135,6 +142,15 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       if (msg.quantity !== undefined) item.quantity = safeString(msg.quantity, MAX_QUANTITY_LENGTH);
       if (msg.categoryId !== undefined) item.categoryId = validCategoryId(state, msg.categoryId);
       if (msg.priority !== undefined && isPriority(msg.priority)) item.priority = msg.priority;
+      if (msg.photoId !== undefined) {
+        // null = retire la photo ; une chaîne invalide (message forgé à la
+        // main) est ignorée plutôt que d'en inventer une nouvelle — un id
+        // fabriqué ne correspondrait à aucun objet réel du bucket R2 (voir
+        // worker/photos.ts), contrairement à safeId() ailleurs dans ce
+        // fichier qui, lui, doit toujours produire un id d'ITEM valide.
+        if (msg.photoId === null) delete item.photoId;
+        else if (isSafePhotoId(msg.photoId)) item.photoId = msg.photoId;
+      }
       item.updatedAt = now;
       return;
     }

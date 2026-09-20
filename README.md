@@ -24,6 +24,10 @@ Cloudflare (Workers + Durable Objects, sans base de données externe).
   de la liste (nom, articles, catégories) sans rejoindre le Durable Object
   en direct : l'ouvrir propose la même fusion/remplacement dans une liste,
   existante ou nouvelle.
+- **Photo par article** : prends une photo ou choisis une image pour
+  identifier un produit d'un coup d'œil. Stockée dans un bucket R2 séparé
+  (jamais dans l'état synchronisé de la liste, voir Modèle de données
+  ci-dessous), donc sans impact sur la taille des mises à jour temps réel.
 - **Hors-ligne minimal** : la dernière version connue de chaque liste est
   gardée en cache local, avec reconnexion automatique.
 - **Installable (PWA)** : manifest + service worker, s'ajoute à l'écran
@@ -72,11 +76,20 @@ une priorité ou une couleur de catégorie mal formés sont corrigés ou ignoré
 plutôt que stockés tels quels, et les noms/quantités sont plafonnés en
 longueur.
 
+Les photos d'articles sont stockées non chiffrées dans un bucket R2 séparé
+(voir `worker/index.ts`) : même modèle de confiance que le reste (accessible
+à qui obtient le code de la liste), plafonnées en taille et en type de
+fichier accepté côté serveur (`shared/photo.ts`), jamais réutilisables d'une
+liste à l'autre (id imprévisible, préfixé par le code — voir
+`worker/photos.ts`).
+
 ## Stack technique
 
 - [Cloudflare Workers](https://developers.cloudflare.com/workers/) +
   [Durable Objects](https://developers.cloudflare.com/durable-objects/)
-  (une instance par liste, stockage + diffusion WebSocket).
+  (une instance par liste, stockage + diffusion WebSocket) +
+  [R2](https://developers.cloudflare.com/r2/) (stockage des photos
+  d'articles, séparé de l'état synchronisé).
 - [Vite](https://vite.dev/) + [`@cloudflare/vite-plugin`](https://developers.cloudflare.com/workers/vite-plugin/)
   pour un dev loop unique (front + Worker tournent dans le même processus,
   avec `workerd`) + [`vite-plugin-pwa`](https://vite-pwa-org.netlify.app/)
@@ -98,13 +111,17 @@ Cloudflare fait tourner le Worker et le Durable Object localement.
 ## Déployer sur Cloudflare
 
 ```bash
+npx wrangler r2 bucket create koikimanke-photos # une seule fois, avant le premier déploiement
 npm run deploy
 ```
 
 Ceci build le front (`vite build`, qui produit aussi une config Wrangler
 prête à l'emploi dans `dist/`) puis déploie avec `wrangler deploy`. Il faut
 être connecté à un compte Cloudflare (`npx wrangler login` la première
-fois).
+fois). Le bucket R2 (photos d'articles) doit exister avant le premier
+déploiement : `wrangler.json` référence son nom mais ne le crée pas
+lui-même. En local (`npm run dev`), le plugin Cloudflare le simule
+automatiquement, sans compte ni bucket réel.
 
 ## Déployer sur GitHub Pages
 
@@ -167,3 +184,10 @@ articles, catégories, historique des noms déjà utilisés. Les mutations
 (ajout, coche, déplacement, catégories…) sont envoyées en WebSocket sous
 forme de petits messages typés (`shared/types.ts`), appliquées côté serveur,
 persistées puis rediffusées à tous les clients connectés.
+
+La photo d'un article fait exception : elle vit dans un bucket R2 séparé, un
+article ne gardant qu'un identifiant (`Item.photoId`) vers elle — jamais ses
+octets dans le `ListState` lui-même, qui est rediffusé en entier à chaque
+mutation (voir ci-dessus) et mis en cache tel quel côté client
+(`localStorage`). L'intégrer directement y aurait gonflé chaque diffusion et
+chaque cache, même pour un appareil qui ne regarde jamais cette photo.

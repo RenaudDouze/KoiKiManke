@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createList, fetchListState } from "./http";
+import { createList, fetchListState, photoUrl, uploadItemPhoto } from "./http";
 import type { ListState } from "../../shared/types";
 
 const sampleState: ListState = {
@@ -69,5 +69,40 @@ describe("fetchListState", () => {
   it("lève une erreur réseau pour toute autre réponse non ok", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
     await expect(fetchListState("ABCDEF")).rejects.toThrow("Erreur réseau.");
+  });
+});
+
+describe("photoUrl", () => {
+  it("construit l'URL de la photo à partir du code et de l'id", () => {
+    expect(photoUrl("ABCDEF", "the-id")).toBe("/api/lists/ABCDEF/photos/the-id");
+  });
+
+  it("encode le code et l'id", () => {
+    expect(photoUrl("A B", "i d")).toBe("/api/lists/A%20B/photos/i%20d");
+  });
+});
+
+describe("uploadItemPhoto", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("poste le fichier avec son content-type et renvoie l'id renvoyé par le serveur", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "new-id" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new Blob(["fake-bytes"], { type: "image/png" });
+
+    const id = await uploadItemPhoto("ABCDEF", file);
+
+    expect(id).toBe("new-id");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/lists/ABCDEF/photos",
+      expect.objectContaining({ method: "POST", headers: { "content-type": "image/png" }, body: file }),
+    );
+  });
+
+  it("lève une erreur si la réponse n'est pas ok", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    await expect(uploadItemPhoto("ABCDEF", new Blob(["x"], { type: "image/png" }))).rejects.toThrow("Impossible d'envoyer la photo.");
   });
 });

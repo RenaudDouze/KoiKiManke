@@ -25,6 +25,11 @@ export interface Item {
   /** Optional for backward compatibility with items created before this
    * field existed — always read via `item.priority ?? 1` (Normale). */
   priority?: Priority;
+  /** Id of a photo stored in the R2 bucket (see worker/photos.ts), never the
+   * image bytes themselves — see shared/photo.ts for why. Undefined = no
+   * photo. Stripped on import (worker/reducer.ts's sanitizeImportedItem):
+   * it only ever names an object scoped to the list that uploaded it. */
+  photoId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -55,7 +60,9 @@ export type ClientMessage =
   | { type: "sync" }
   | { type: "renameList"; name: string }
   | { type: "addItem"; id: string; rawText: string; categoryId: string | null }
-  | { type: "updateItem"; id: string; name?: string; quantity?: string; categoryId?: string | null; priority?: Priority }
+  // photoId: undefined = unchanged, a string = set to this (already-uploaded,
+  // see src/lib/http.ts's uploadItemPhoto) photo id, null = remove the photo.
+  | { type: "updateItem"; id: string; name?: string; quantity?: string; categoryId?: string | null; priority?: Priority; photoId?: string | null }
   | { type: "toggleItem"; id: string; checked: boolean }
   | { type: "deleteItem"; id: string }
   | { type: "clearChecked" }

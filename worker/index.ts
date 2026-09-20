@@ -1,9 +1,12 @@
 import { ListRoom } from "./listRoom";
+import { generatePhotoId, photoObjectKey } from "./photos";
+import { isAllowedPhotoType, MAX_PHOTO_BYTES } from "../shared/photo";
 
 export { ListRoom };
 
 interface Env {
   LIST_ROOM: DurableObjectNamespace<ListRoom>;
+  PHOTOS: R2Bucket;
   ASSETS: Fetcher;
 }
 
@@ -86,6 +89,50 @@ export default {
         const res = await stub.fetch("https://list.internal/state");
         return jsonPassthrough(res);
       }
+    }
+
+    // Upload de la photo d'un article : stocké dans le bucket R2 dédié
+    // (jamais dans le ListState lui-même, voir shared/photo.ts) — le Worker
+    // écrit/lit directement le bucket, sans passer par le Durable Object
+    // (dont le rôle se limite à l'état synchronisé en temps réel), mais
+    // vérifie d'abord que la liste existe pour ne pas servir de stockage de
+    // fichiers anonyme sans rapport avec une liste réelle.
+    const photoUploadMatch = url.pathname.match(/^\/api\/lists\/([A-Za-z0-9]{4,10})\/photos$/);
+    if (photoUploadMatch && request.method === "POST") {
+      const code = normalizeCode(photoUploadMatch[1]);
+      const stub = env.LIST_ROOM.get(env.LIST_ROOM.idFromName(code));
+      const existing = await stub.fetch("https://list.internal/state");
+      if (existing.status === 404) return new Response("Liste introuvable.", { status: 404, headers: CORS_HEADERS });
+
+      const contentType = request.headers.get("content-type");
+      if (!isAllowedPhotoType(contentType)) {
+        return new Response("Type de fichier non pris en charge.", { status: 415, headers: CORS_HEADERS });
+      }
+      const bytes = await request.arrayBuffer();
+      if (bytes.byteLength === 0 || bytes.byteLength > MAX_PHOTO_BYTES) {
+        return new Response("Photo trop volumineuse.", { status: 413, headers: CORS_HEADERS });
+      }
+      const id = generatePhotoId();
+      await env.PHOTOS.put(photoObjectKey(code, id), bytes, { httpMetadata: { contentType: contentType! } });
+      return new Response(JSON.stringify({ id }), { status: 200, headers: { "content-type": "application/json", ...CORS_HEADERS } });
+    }
+
+    const photoMatch = url.pathname.match(/^\/api\/lists\/([A-Za-z0-9]{4,10})\/photos\/([A-Za-z0-9_-]{1,64})$/);
+    if (photoMatch && request.method === "GET") {
+      const code = normalizeCode(photoMatch[1]);
+      const object = await env.PHOTOS.get(photoObjectKey(code, photoMatch[2]));
+      if (!object) return new Response("Photo introuvable.", { status: 404, headers: CORS_HEADERS });
+      return new Response(object.body, {
+        status: 200,
+        headers: {
+          "content-type": object.httpMetadata?.contentType ?? "application/octet-stream",
+          // Remplacer une photo en pose toujours une nouvelle sous un nouvel
+          // id plutôt que de muter l'objet existant (voir photoId dans
+          // worker/reducer.ts) : un cache long et immuable est donc sûr.
+          "cache-control": "public, max-age=31536000, immutable",
+          ...CORS_HEADERS,
+        },
+      });
     }
 
     if (url.pathname.startsWith("/api/")) {

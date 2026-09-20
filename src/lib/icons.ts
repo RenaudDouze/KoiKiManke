@@ -54,6 +54,9 @@ export const icons = {
   upload: svg('<path d="M12 20V7"/><path d="m7 12 5-5 5 5"/><path d="M4 21h16"/>'),
   accessibility: svg('<circle cx="12" cy="4" r="2"/><path d="M12 8v5"/><path d="M6 10h12"/><path d="M12 13l-4 8"/><path d="M12 13l4 8"/>'),
   bell: svg('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>'),
+  camera: svg(
+    '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3.5"/>',
+  ),
 } as const;
 
 export type IconName = keyof typeof icons;

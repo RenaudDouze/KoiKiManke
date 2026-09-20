@@ -1,7 +1,8 @@
 import type { Category, HistoryEntry, Item, ListState, Priority } from "../../shared/types";
 import { parseFreeText } from "../../shared/quantity";
 import { ListConnection } from "../lib/ws";
-import { fetchListState } from "../lib/http";
+import { fetchListState, photoUrl, uploadItemPhoto } from "../lib/http";
+import { isAllowedPhotoType, MAX_PHOTO_BYTES } from "../../shared/photo";
 import { cacheListState, getCachedListState, touchRecentList } from "../lib/storage";
 import { uid } from "../lib/id";
 import { escapeHtml } from "../lib/dom";
@@ -514,6 +515,88 @@ export function mountListView(
     });
   }
 
+  // Un <input type=file> créé/déclenché/retiré à la volée plutôt qu'un champ
+  // permanent dans layoutHtml() : évite un état caché à réinitialiser entre
+  // deux photos, et `capture="environment"` propose directement l'appareil
+  // photo arrière sur mobile sans empêcher de choisir une image existante.
+  function triggerPhotoPicker(itemId: string): void {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.setAttribute("capture", "environment");
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      input.remove();
+      if (file) void handlePhotoFile(itemId, file);
+    });
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  async function handlePhotoFile(itemId: string, file: File): Promise<void> {
+    // Revalidé côté serveur de toute façon (voir worker/index.ts) : ces deux
+    // contrôles côté client ne font qu'éviter un aller-retour réseau pour un
+    // fichier qu'on sait déjà rejeter (mauvais type, ou trop volumineux).
+    if (!isAllowedPhotoType(file.type)) {
+      showToast("Format de photo non pris en charge.");
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      showToast("Photo trop volumineuse.");
+      return;
+    }
+    try {
+      const photoId = await uploadItemPhoto(state!.code, file);
+      conn.send({ type: "updateItem", id: itemId, photoId });
+    } catch {
+      showToast("Impossible d'envoyer la photo.");
+    }
+  }
+
+  // Simple édition de champ (comme renommer/requantifier un article) plutôt
+  // qu'une suppression structurelle : pas de pile d'annulation ici, cohérent
+  // avec les autres édition de champ unique de cette vue.
+  function openPhotoViewer(item: Item): void {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal photo-viewer-modal" role="dialog" aria-modal="true" tabindex="-1">
+        <button class="icon-btn modal-close" aria-label="Fermer">${icons.close}</button>
+        <h2>${escapeHtml(item.name)}</h2>
+        <img class="photo-viewer-img" src="${escapeHtml(photoUrl(state!.code, item.photoId!))}" alt="" />
+        <div class="stacked-actions">
+          <button class="btn primary" id="photo-replace">Remplacer la photo</button>
+          <button class="btn danger" id="photo-remove">Supprimer la photo</button>
+          <button class="btn" id="photo-cancel">Fermer</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const releaseFocusTrap = trapFocus(overlay.querySelector(".modal")!);
+    const close = () => {
+      overlay.remove();
+      releaseFocusTrap();
+      document.removeEventListener("keydown", onKeydown);
+    };
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    document.addEventListener("keydown", onKeydown);
+    overlay.querySelector(".modal-close")!.addEventListener("click", close);
+    overlay.querySelector("#photo-cancel")!.addEventListener("click", close);
+    overlay.querySelector("#photo-replace")!.addEventListener("click", () => {
+      close();
+      triggerPhotoPicker(item.id);
+    });
+    overlay.querySelector("#photo-remove")!.addEventListener("click", () => {
+      conn.send({ type: "updateItem", id: item.id, photoId: null });
+      close();
+    });
+  }
+
   function openCategoryManager(): void {
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
@@ -1022,6 +1105,15 @@ export function mountListView(
       });
     });
 
+    container.querySelectorAll<HTMLButtonElement>(".item-photo").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const item = state!.items.find((i) => i.id === btn.dataset.id);
+        if (!item) return;
+        if (item.photoId) openPhotoViewer(item);
+        else triggerPhotoPicker(item.id);
+      });
+    });
+
     container.querySelectorAll<HTMLSelectElement>(".item-category").forEach((sel) => {
       sel.addEventListener("change", () => {
         conn.send({ type: "updateItem", id: sel.dataset.id!, categoryId: sel.value || null });
@@ -1143,6 +1235,11 @@ export function mountListView(
           <button class="item-priority" data-action="cycle-priority" data-id="${id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)"></button>
           <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${id}">${escapeHtml(item.quantity) || "+"}</span>
           <span class="item-name" data-id="${id}">${escapeHtml(item.name)}</span>
+          ${
+            item.photoId
+              ? `<button type="button" class="item-photo has-photo" data-id="${id}" aria-label="Voir la photo de « ${escapeHtml(item.name)} »"><img src="${escapeHtml(photoUrl(state!.code, item.photoId))}" alt="" loading="lazy" /></button>`
+              : `<button type="button" class="item-photo" data-id="${id}" aria-label="Ajouter une photo à « ${escapeHtml(item.name)} »">${icons.camera}</button>`
+          }
           <span class="item-category-picker">
             <span class="icon-btn item-category-icon" aria-hidden="true">${icons.tag}</span>
             <select class="item-category" data-id="${id}" aria-label="Changer la catégorie de « ${escapeHtml(item.name)} »">

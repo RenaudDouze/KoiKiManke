@@ -256,6 +256,39 @@ describe("applyMessage", () => {
       applyMessage(state, { type: "updateItem", id: "i1", name: 12345 as unknown as string }, NOW);
       expect(state.items[0].name).toBe("");
     });
+
+    it("pose photoId quand il est fourni et valide", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", photoId: "abc123" }, NOW);
+      expect(state.items[0].photoId).toBe("abc123");
+    });
+
+    it("retire photoId quand il vaut explicitement null", () => {
+      const state = withItem();
+      state.items[0].photoId = "abc123";
+      applyMessage(state, { type: "updateItem", id: "i1", photoId: null }, NOW);
+      expect(state.items[0].photoId).toBeUndefined();
+    });
+
+    it("ne touche pas photoId quand il n'est pas fourni", () => {
+      const state = withItem();
+      state.items[0].photoId = "abc123";
+      applyMessage(state, { type: "updateItem", id: "i1", quantity: "3" }, NOW);
+      expect(state.items[0].photoId).toBe("abc123");
+    });
+
+    it("ignore un photoId mal formé (ex: message forgé) plutôt que de le stocker tel quel", () => {
+      const state = withItem();
+      applyMessage(state, { type: "updateItem", id: "i1", photoId: "../secret" }, NOW);
+      expect(state.items[0].photoId).toBeUndefined();
+    });
+
+    it("remplace un photoId existant par un nouveau valide", () => {
+      const state = withItem();
+      state.items[0].photoId = "old-id";
+      applyMessage(state, { type: "updateItem", id: "i1", photoId: "new-id" }, NOW);
+      expect(state.items[0].photoId).toBe("new-id");
+    });
   });
 
   describe("toggleItem", () => {
@@ -484,6 +517,52 @@ describe("applyMessage", () => {
       expect(state.items[0].priority).toBeUndefined();
       expect(state.categories[0].id).not.toContain('"');
       expect(state.categories[0].color).toBeUndefined();
+    });
+
+    it("retire toujours photoId d'un item importé, même bien formé (mode replace)", () => {
+      // Un photoId ne nomme un objet R2 réel que dans la liste qui l'a
+      // uploadé : un fichier exporté ou un lien compact importé ailleurs
+      // (voire réimporté dans la même liste) ne doit jamais le faire
+      // traverser tel quel.
+      const state = makeState();
+      applyMessage(
+        state,
+        {
+          type: "importState",
+          mode: "replace",
+          data: {
+            name: "",
+            items: [
+              { id: "i1", name: "Pommes", quantity: "", categoryId: null, checked: false, order: 0, photoId: "some-id", createdAt: 0, updatedAt: 0 },
+            ],
+            categories: [],
+            history: [],
+          },
+        },
+        NOW,
+      );
+      expect(state.items[0].photoId).toBeUndefined();
+    });
+
+    it("retire aussi photoId en mode merge", () => {
+      const state = makeState();
+      applyMessage(
+        state,
+        {
+          type: "importState",
+          mode: "merge",
+          data: {
+            name: "",
+            items: [
+              { id: "i1", name: "Pommes", quantity: "", categoryId: null, checked: false, order: 0, photoId: "some-id", createdAt: 0, updatedAt: 0 },
+            ],
+            categories: [],
+            history: [],
+          },
+        },
+        NOW,
+      );
+      expect(state.items[0].photoId).toBeUndefined();
     });
 
     it("mode replace conserve le nom actuel si data.name n'est pas une chaîne (ex: nombre)", () => {

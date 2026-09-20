@@ -58,9 +58,10 @@ export const icons = {
     '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3.5"/>',
   ),
   // Priorité : forme distincte à chaque niveau (pas seulement une couleur,
-  // voir style.css) — chevron bas discret pour Basse, simple trait neutre
-  // pour Normale, triangle plein (repère universel d'alerte) pour Haute.
-  priorityLow: svg('<path d="M6 9l6 6 6-6"/>'),
+  // voir style.css) — triangle plein pointant vers le bas pour Basse,
+  // symétrique (miroir vertical) du triangle plein pointant vers le haut
+  // de Haute, simple trait neutre pour Normale entre les deux.
+  priorityLow: svg('<path d="M12 21l9-18H3Z"/>', { filled: true }),
   priorityNormal: svg('<path d="M5 12h14"/>'),
   priorityHigh: svg('<path d="M12 3l9 18H3Z"/>', { filled: true }),
 } as const;

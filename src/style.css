@@ -812,10 +812,12 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-/* Une icône par niveau (chevron bas / trait / triangle plein, voir
+/* Une icône par niveau (triangle bas / trait / triangle haut, voir
    icons.ts), plus lisible qu'une simple barre de couleur : la forme porte
-   l'information, la couleur ne fait que la renforcer (accessible même sans
-   distinguer les couleurs). */
+   l'information (Basse et Haute sont le miroir vertical l'une de l'autre),
+   la couleur ne fait que la renforcer (accessible même sans distinguer les
+   couleurs). Même opacité pleine pour les deux triangles : les distinguer
+   par une opacité réduite affaiblirait justement la lisibilité recherchée. */
 .item-priority {
   flex-shrink: 0;
   font-size: 0.9rem;
@@ -825,7 +827,6 @@ button:focus-visible {
 
 .item-priority[data-priority="0"] {
   color: var(--priority-low);
-  opacity: 0.75;
 }
 
 .item-priority[data-priority="1"] {

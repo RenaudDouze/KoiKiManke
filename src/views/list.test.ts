@@ -80,6 +80,9 @@ vi.mock("../lib/http", () => ({
 const openShareModal = vi.fn();
 vi.mock("../components/shareModal", () => ({ openShareModal: (...a: unknown[]) => openShareModal(...a) }));
 
+const openAccessibilityModal = vi.fn();
+vi.mock("../components/accessibilityModal", () => ({ openAccessibilityModal: () => openAccessibilityModal() }));
+
 const exportListState = vi.fn();
 vi.mock("../lib/importExport", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/importExport")>();
@@ -486,13 +489,13 @@ describe("mountListView", () => {
       expect(btn.innerHTML).not.toBe(before);
     });
 
-    it("« Accessibilité » bascule la préférence et met à jour son libellé", async () => {
+    it("« Accessibilité » ouvre la modale dédiée", async () => {
       await mount();
       const btn = root.querySelector('[data-action="accessibility"]') as HTMLElement;
 
       btn.click();
 
-      expect(btn.innerHTML).toContain("Activé");
+      expect(openAccessibilityModal).toHaveBeenCalledTimes(1);
     });
 
     it("« Tri des articles » cycle la préférence et ré-affiche", async () => {

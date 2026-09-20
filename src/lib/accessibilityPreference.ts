@@ -1,45 +1,49 @@
-export type AccessibilityPreference = "off" | "on";
-
-const KEY = "nldc:a11y";
-const NEXT: Record<AccessibilityPreference, AccessibilityPreference> = { off: "on", on: "off" };
-const LABEL: Record<AccessibilityPreference, string> = { off: "Désactivé", on: "Activé" };
-
-function isAccessibilityPreference(value: unknown): value is AccessibilityPreference {
-  return value === "off" || value === "on";
+export interface AccessibilityPreference {
+  largeText: boolean;
+  highContrast: boolean;
+  reduceMotion: boolean;
 }
 
+const KEY = "nldc:a11y";
+
+const DEFAULT_PREFERENCE: AccessibilityPreference = { largeText: false, highContrast: false, reduceMotion: false };
+
+// Réglage personnel par appareil (comme le thème), jamais synchronisé via le
+// ListState partagé. Reste sur les valeurs par défaut (tout désactivé) si
+// rien n'est stocké, si la valeur stockée est invalide (y compris l'ancien
+// format `"on"`/`"off"` d'avant le passage à trois réglages indépendants),
+// ou si localStorage est indisponible.
 export function getAccessibilityPreference(): AccessibilityPreference {
   try {
-    const stored = localStorage.getItem(KEY);
-    return isAccessibilityPreference(stored) ? stored : "off";
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return { ...DEFAULT_PREFERENCE };
+    const parsed = JSON.parse(raw);
+    return {
+      largeText: parsed?.largeText === true,
+      highContrast: parsed?.highContrast === true,
+      reduceMotion: parsed?.reduceMotion === true,
+    };
   } catch {
-    return "off";
+    return { ...DEFAULT_PREFERENCE };
   }
 }
 
-// Un seul attribut sur <html> pilote tout : texte agrandi (cascade rem/em,
-// voir style.css — icons.ts définit d'ailleurs les siennes en 1em), contraste
-// renforcé (couleurs de texte/bordures) et transitions/animations coupées.
+// Trois attributs booléens indépendants sur <html>, lus par style.css
+// ([data-large-text]/[data-high-contrast]/[data-reduce-motion]) — plutôt
+// qu'un seul `data-a11y` regroupant tout, pour permettre à chacun d'être
+// activé séparément selon le besoin réel de la personne.
 export function applyAccessibilityPreference(pref: AccessibilityPreference): void {
-  if (pref === "off") document.documentElement.removeAttribute("data-a11y");
-  else document.documentElement.setAttribute("data-a11y", pref);
+  const root = document.documentElement;
+  root.toggleAttribute("data-large-text", pref.largeText);
+  root.toggleAttribute("data-high-contrast", pref.highContrast);
+  root.toggleAttribute("data-reduce-motion", pref.reduceMotion);
 }
 
 export function setAccessibilityPreference(pref: AccessibilityPreference): void {
   try {
-    localStorage.setItem(KEY, pref);
+    localStorage.setItem(KEY, JSON.stringify(pref));
   } catch {
     // storage unavailable, preference just won't persist across reloads
   }
   applyAccessibilityPreference(pref);
-}
-
-export function toggleAccessibilityPreference(): AccessibilityPreference {
-  const next = NEXT[getAccessibilityPreference()];
-  setAccessibilityPreference(next);
-  return next;
-}
-
-export function accessibilityLabel(pref: AccessibilityPreference): string {
-  return LABEL[pref];
 }

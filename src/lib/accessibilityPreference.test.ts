@@ -1,78 +1,73 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { accessibilityLabel, applyAccessibilityPreference, getAccessibilityPreference, setAccessibilityPreference, toggleAccessibilityPreference } from "./accessibilityPreference";
+import { applyAccessibilityPreference, getAccessibilityPreference, setAccessibilityPreference } from "./accessibilityPreference";
 
 describe("accessibility", () => {
   beforeEach(() => {
     localStorage.clear();
-    document.documentElement.removeAttribute("data-a11y");
+    document.documentElement.removeAttribute("data-large-text");
+    document.documentElement.removeAttribute("data-high-contrast");
+    document.documentElement.removeAttribute("data-reduce-motion");
   });
 
   describe("getAccessibilityPreference", () => {
-    it("vaut \"off\" par défaut", () => {
-      expect(getAccessibilityPreference()).toBe("off");
+    it("vaut tout désactivé par défaut", () => {
+      expect(getAccessibilityPreference()).toEqual({ largeText: false, highContrast: false, reduceMotion: false });
     });
 
     it("lit la préférence stockée si valide", () => {
+      localStorage.setItem("nldc:a11y", JSON.stringify({ largeText: true, highContrast: false, reduceMotion: true }));
+      expect(getAccessibilityPreference()).toEqual({ largeText: true, highContrast: false, reduceMotion: true });
+    });
+
+    it("retombe sur tout désactivé si la valeur stockée est un JSON invalide", () => {
+      localStorage.setItem("nldc:a11y", "not json");
+      expect(getAccessibilityPreference()).toEqual({ largeText: false, highContrast: false, reduceMotion: false });
+    });
+
+    it("retombe sur tout désactivé pour l'ancien format (chaîne \"on\"/\"off\")", () => {
       localStorage.setItem("nldc:a11y", "on");
-      expect(getAccessibilityPreference()).toBe("on");
+      expect(getAccessibilityPreference()).toEqual({ largeText: false, highContrast: false, reduceMotion: false });
     });
 
-    it("retombe sur \"off\" si la valeur stockée est invalide", () => {
-      localStorage.setItem("nldc:a11y", "maybe");
-      expect(getAccessibilityPreference()).toBe("off");
-    });
-
-    it("retombe sur \"off\" si localStorage lève", () => {
+    it("retombe sur tout désactivé si localStorage lève", () => {
       const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
         throw new Error("denied");
       });
-      expect(getAccessibilityPreference()).toBe("off");
+      expect(getAccessibilityPreference()).toEqual({ largeText: false, highContrast: false, reduceMotion: false });
       spy.mockRestore();
     });
   });
 
   describe("applyAccessibilityPreference", () => {
-    it("retire l'attribut data-a11y pour \"off\"", () => {
-      document.documentElement.setAttribute("data-a11y", "on");
-      applyAccessibilityPreference("off");
-      expect(document.documentElement.hasAttribute("data-a11y")).toBe(false);
+    it("pose chaque attribut indépendamment selon la préférence", () => {
+      applyAccessibilityPreference({ largeText: true, highContrast: false, reduceMotion: true });
+      expect(document.documentElement.hasAttribute("data-large-text")).toBe(true);
+      expect(document.documentElement.hasAttribute("data-high-contrast")).toBe(false);
+      expect(document.documentElement.hasAttribute("data-reduce-motion")).toBe(true);
     });
 
-    it("pose data-a11y pour \"on\"", () => {
-      applyAccessibilityPreference("on");
-      expect(document.documentElement.getAttribute("data-a11y")).toBe("on");
+    it("retire les attributs pour un réglage désactivé", () => {
+      document.documentElement.setAttribute("data-large-text", "");
+      applyAccessibilityPreference({ largeText: false, highContrast: false, reduceMotion: false });
+      expect(document.documentElement.hasAttribute("data-large-text")).toBe(false);
     });
   });
 
   describe("setAccessibilityPreference", () => {
-    it("persiste et applique l'attribut", () => {
-      setAccessibilityPreference("on");
-      expect(localStorage.getItem("nldc:a11y")).toBe("on");
-      expect(document.documentElement.getAttribute("data-a11y")).toBe("on");
+    it("persiste et applique les attributs", () => {
+      setAccessibilityPreference({ largeText: false, highContrast: true, reduceMotion: false });
+      expect(JSON.parse(localStorage.getItem("nldc:a11y")!)).toEqual({ largeText: false, highContrast: true, reduceMotion: false });
+      expect(document.documentElement.hasAttribute("data-high-contrast")).toBe(true);
     });
 
     it("applique quand même si localStorage lève", () => {
       const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
         throw new Error("quota");
       });
-      setAccessibilityPreference("on");
-      expect(document.documentElement.getAttribute("data-a11y")).toBe("on");
+      setAccessibilityPreference({ largeText: true, highContrast: false, reduceMotion: false });
+      expect(document.documentElement.hasAttribute("data-large-text")).toBe(true);
       spy.mockRestore();
-    });
-  });
-
-  describe("toggleAccessibilityPreference", () => {
-    it("bascule off ↔ on", () => {
-      expect(toggleAccessibilityPreference()).toBe("on");
-      expect(toggleAccessibilityPreference()).toBe("off");
-    });
-  });
-
-  describe("accessibilityLabel", () => {
-    it("traduit chaque valeur en libellé affiché", () => {
-      expect(accessibilityLabel("off")).toBe("Désactivé");
-      expect(accessibilityLabel("on")).toBe("Activé");
     });
   });
 });

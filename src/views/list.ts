@@ -517,13 +517,19 @@ export function mountListView(
 
   // Un <input type=file> créé/déclenché/retiré à la volée plutôt qu'un champ
   // permanent dans layoutHtml() : évite un état caché à réinitialiser entre
-  // deux photos, et `capture="environment"` propose directement l'appareil
-  // photo arrière sur mobile sans empêcher de choisir une image existante.
+  // deux photos. Pas de `capture="environment"` : il permet bien de choisir
+  // une image déjà existante (galerie/fichiers) en plus de prendre une
+  // photo sur certains navigateurs/OS, mais pas partout de façon fiable —
+  // certaines combinaisons Android/WebView plus anciennes ouvrent
+  // directement l'appareil photo sans proposer d'alternative. Sans cet
+  // attribut, le sélecteur de fichier natif standard s'affiche partout de
+  // la même façon (photo, galerie ou fichier, au choix), ce qui correspond
+  // à l'intention : envoyer une image quelconque, pas seulement une photo
+  // prise sur le vif.
   function triggerPhotoPicker(itemId: string): void {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.setAttribute("capture", "environment");
     input.addEventListener("change", () => {
       const file = input.files?.[0];
       input.remove();

@@ -661,6 +661,25 @@ describe("mountListView", () => {
       expect(suggestions.hidden).toBe(true);
     });
 
+    it("l'auto-complétion ignore les diacritiques, dans les deux sens", async () => {
+      const conn = await mount(sampleState({ history: [makeHistory({ key: "café", label: "Café" })] }));
+      const input = root.querySelector("#add-input") as HTMLInputElement;
+      const suggestions = root.querySelector("#suggestions") as HTMLElement;
+
+      input.value = "cafe";
+      input.dispatchEvent(new Event("input"));
+      expect(suggestions.hidden).toBe(false);
+      expect(suggestions.textContent).toContain("Café");
+
+      input.value = "café";
+      input.dispatchEvent(new Event("input"));
+      expect(suggestions.hidden).toBe(false);
+      expect(suggestions.textContent).toContain("Café");
+
+      (suggestions.querySelector("button") as HTMLButtonElement).dispatchEvent(new Event("mousedown", { bubbles: true, cancelable: true }));
+      expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: "addItem", rawText: "Café" }));
+    });
+
     it("choisir une suggestion d'auto-complétion déjà supprimée entre-temps ne fait rien", async () => {
       const conn = await mount(sampleState({ history: [makeHistory({ key: "pommes", label: "Pommes" })] }));
       const input = root.querySelector("#add-input") as HTMLInputElement;
@@ -1608,6 +1627,17 @@ describe("mountListView", () => {
 
       expect(document.querySelectorAll(".suggestion-name")).toHaveLength(1);
       expect(document.querySelector(".suggestion-name")?.textContent).toBe("Pommes");
+    });
+
+    it("filtre les suggestions par recherche en ignorant les diacritiques", async () => {
+      await mount(sampleState({ history: [makeHistory({ key: "café", label: "Café" }), makeHistory({ key: "poires", label: "Poires" })] }));
+      root.querySelector('[data-action="manage-suggestions"]')?.dispatchEvent(new Event("click"));
+      const searchInput = document.querySelector("#suggestion-search") as HTMLInputElement;
+      searchInput.value = "cafe";
+      searchInput.dispatchEvent(new Event("input"));
+
+      expect(document.querySelectorAll(".suggestion-name")).toHaveLength(1);
+      expect(document.querySelector(".suggestion-name")?.textContent).toBe("Café");
     });
 
     it("affiche un message si aucune suggestion ne correspond à la recherche", async () => {

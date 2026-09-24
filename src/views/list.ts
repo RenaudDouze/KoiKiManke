@@ -16,7 +16,7 @@ import { decodeListFromParam } from "../lib/compactShare";
 import { icons } from "../lib/icons";
 import { trapFocus } from "../lib/focusTrap";
 import { resolveCategoryHue } from "../lib/color";
-import { alnumCompare } from "../lib/sort";
+import { alnumCompare, normalizeForSearch } from "../lib/sort";
 import { cycleThemePreference, getThemePreference, themeLabel, type ThemePreference } from "../lib/theme";
 import { openAccessibilityModal } from "../components/accessibilityModal";
 import { cycleItemSortPreference, getItemSortPreference, itemSortLabel } from "../lib/itemSortPreference";
@@ -817,8 +817,8 @@ export function mountListView(
         container.innerHTML = `<p class="hint">Aucune suggestion pour l'instant : elles apparaissent une fois qu'un article a été coché.</p>`;
         return;
       }
-      const q = searchQuery.trim().toLowerCase();
-      const matches = (h: HistoryEntry) => !q || h.label.toLowerCase().includes(q);
+      const q = normalizeForSearch(searchQuery.trim().toLowerCase());
+      const matches = (h: HistoryEntry) => !q || normalizeForSearch(h.label.toLowerCase()).includes(q);
       const favorites = state!.history.filter((h) => h.favorite && matches(h)).sort(sortEntries);
       const others = state!.history.filter((h) => !h.favorite && matches(h)).sort(sortEntries);
       if (favorites.length === 0 && others.length === 0) {
@@ -915,12 +915,14 @@ export function mountListView(
     });
 
     function renderTypeahead(query: string): void {
-      const q = query.trim().toLowerCase();
+      const q = normalizeForSearch(query.trim().toLowerCase());
       if (!q) {
         suggestionsEl.hidden = true;
         return;
       }
-      const matches = suggestionPool().filter((h) => h.key.includes(q)).slice(0, 6);
+      const matches = suggestionPool()
+        .filter((h) => normalizeForSearch(h.key).includes(q))
+        .slice(0, 6);
       if (matches.length === 0) {
         suggestionsEl.hidden = true;
         return;

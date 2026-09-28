@@ -935,7 +935,16 @@ export function mountListView(
         btn.addEventListener("mousedown", (e) => {
           e.preventDefault();
           const entry = state!.history.find((h) => h.key === btn.dataset.key);
-          if (entry) addFromHistory(entry);
+          if (entry) {
+            addFromHistory(entry);
+            // Même nettoyage qu'une soumission normale du formulaire (voir
+            // plus haut) : sans ça, le texte tapé pour chercher la
+            // suggestion (souvent différent du nom exact choisi) resterait
+            // affiché comme si l'ajout n'avait pas eu lieu.
+            input.value = "";
+            preview.hidden = true;
+            showToast(`« ${entry.label} » ajouté`);
+          }
           suggestionsEl.hidden = true;
         });
       });

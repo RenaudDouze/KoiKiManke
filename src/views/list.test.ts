@@ -659,6 +659,8 @@ describe("mountListView", () => {
 
       expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: "addItem", rawText: "Pommes" }));
       expect(suggestions.hidden).toBe(true);
+      expect(input.value).toBe("");
+      expect(document.querySelector(".toast")?.textContent).toBe("« Pommes » ajouté");
     });
 
     it("l'auto-complétion ignore les diacritiques, dans les deux sens", async () => {

@@ -1226,7 +1226,11 @@ button:focus-visible {
 
 .toast {
   position: fixed;
-  bottom: 1.2rem;
+  /* --keyboard-inset (voir src/lib/keyboardInset.ts) compense l'écart entre
+     le viewport de mise en page (où "fixed" s'ancre) et le viewport visuel
+     rétréci par un clavier virtuel mobile : sans ça, ce toast resterait
+     ancré derrière le clavier au lieu de flotter juste au-dessus. */
+  bottom: calc(1.2rem + var(--keyboard-inset, 0px));
   left: 50%;
   transform: translate(-50%, 10px);
   background: var(--text);
@@ -1242,7 +1246,8 @@ button:focus-visible {
 
 .undo-toast {
   position: fixed;
-  bottom: 1.2rem;
+  /* Voir le commentaire sur .toast ci-dessus. */
+  bottom: calc(1.2rem + var(--keyboard-inset, 0px));
   left: 50%;
   transform: translateX(-50%);
   background: var(--text);

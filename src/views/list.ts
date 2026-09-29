@@ -25,6 +25,7 @@ import { getDeviceName } from "../lib/presence";
 import { historyKey } from "../../shared/historyKey";
 import { PRIVACY_HINT } from "../lib/privacyHint";
 import { getNotificationStatus, notificationStatusLabel, notifyItemAdded, toggleNotifications } from "../lib/notifications";
+import { watchKeyboardInset } from "../lib/keyboardInset";
 
 const THEME_ICON: Record<ThemePreference, string> = { system: icons.themeAuto, light: icons.sun, dark: icons.moon };
 
@@ -97,6 +98,7 @@ export function mountListView(
   // onStateUpdate) nous notifierait nos propres ajouts.
   const pendingLocalItemIds = new Set<string>();
   const conn = new ListConnection(code, getDeviceName());
+  const disposeKeyboardInset = watchKeyboardInset();
 
   const UNDO_TIMEOUT_MS = 5000;
   const MAX_UNDO_STACK = 10;
@@ -1400,6 +1402,7 @@ export function mountListView(
     disposeItemDnd?.();
     disposeCategoryDnd?.();
     disposeSwipe?.();
+    disposeKeyboardInset();
     clearUndoStack();
     document.querySelectorAll(".modal-overlay").forEach((el) => el.remove());
   };

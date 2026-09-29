@@ -52,6 +52,7 @@ export default defineConfig({
         "src/lib/dnd.ts",
         "src/lib/swipe.ts",
         "src/lib/ws.ts",
+        "src/lib/keyboardInset.ts",
       ],
       exclude: [
         "**/*.test.ts",

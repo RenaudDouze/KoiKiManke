@@ -932,6 +932,16 @@ button:focus-visible {
   border-radius: 6px;
 }
 
+/* .qty-badge n'a pas de largeur propre (dimensionné par son padding/contenu
+   texte) : un .inline-edit à width: 100% y est circulaire et le navigateur
+   fait grandir le badge pour remplir la ligne, écrasant .item-name (flex: 1;
+   min-width: 0) jusqu'à faire passer à la ligne chaque lettre. Largeur fixe
+   suffisante pour une quantité typique ("500g", "2 kg") ; le texte défile
+   dans l'input au-delà. */
+.qty-badge .inline-edit {
+  width: 3.5em;
+}
+
 .empty-state {
   text-align: center;
   color: var(--text-muted);

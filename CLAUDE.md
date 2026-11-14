@@ -68,7 +68,7 @@ App de liste de courses partagée en temps réel, hébergée entièrement sur Cl
 
 ### CI/CD
 
-- `ci.yml` : lint, vérification des types, tests unitaires+couverture, tests e2e, audit des dépendances et mutation testing en parallèle. Le job `build` ne dépend que des quatre premiers (`needs: [lint, typecheck, unit-tests, e2e-tests]`) — `audit` et `mutation-testing` (~6-7 min, voir « Tests » ci-dessous) tournent en parallèle sans le bloquer ; c'est la règle de protection de branche GitHub (checks requis), pas ce fichier, qui empêche malgré tout la fusion d'une PR tant qu'ils ne sont pas verts. Sur une PR, le client buildé est aussi uploadé comme artefact de prévisualisation.
+- `ci.yml` : lint, vérification des types, tests unitaires+couverture, tests e2e, audit des dépendances et mutation testing en parallèle. Le job `build` dépend de tous les autres (`needs: [lint, typecheck, unit-tests, e2e-tests, mutation-testing, audit]`), dont `mutation-testing` (~6-7 min, voir « Tests » ci-dessous) ; la règle de protection de branche GitHub exige les mêmes checks plus « Analyse » (CodeQL). Sur une PR, le client buildé est aussi uploadé comme artefact de prévisualisation.
 - `deploy.yml` (Cloudflare) et `pages.yml` (GitHub Pages) se déclenchent tous les deux via `workflow_run` à la fin de CI sur `main` (jamais sur un push direct) — un `main` cassé n'est donc jamais redéployé. Les deux acceptent aussi `workflow_dispatch` pour un redéclenchement manuel. `deploy.yml` fait en plus un test de fumée post-déploiement (accueil 200, un code de liste non attribué 404) et pousse un tag `deploy-N` pour repérer/revenir à une version.
 - `codeql.yml` tourne sur push/PR vers `main` et une fois par semaine.
 

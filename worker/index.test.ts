@@ -353,3 +353,152 @@ describe("routes non gérées", () => {
     expect(await res.text()).toBe("served:/l/ABCDEF");
   });
 });
+
+describe("contrat des requêtes envoyées au Durable Object et des réponses", () => {
+  interface Call {
+    code: string;
+    url: string;
+    method?: string;
+    body?: unknown;
+    contentType?: string | null;
+  }
+
+  function recorder(respond: (code: string, url: string) => Response = (code) => Response.json({ code, name: "Courses", items: [], categories: [], history: [], createdAt: 0, updatedAt: 0 })) {
+    const calls: Call[] = [];
+    const handler: FakeHandler = (code, input, init) => {
+      const url = typeof input === "string" ? input : input.url;
+      calls.push({
+        code,
+        url,
+        method: init?.method,
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+        contentType: new Headers(init?.headers).get("content-type"),
+      });
+      return respond(code, url);
+    };
+    return { calls, handler };
+  }
+
+  const freeCode = (code: string, url: string) =>
+    url.endsWith("/state")
+      ? new Response("nope", { status: 404 })
+      : Response.json({ code, name: "Mes courses", items: [], categories: [], history: [], createdAt: 0, updatedAt: 0 });
+
+  it("crée une liste avec un code de 6 caractères lisibles et le transmet à /init en JSON", async () => {
+    const { calls, handler } = recorder(freeCode);
+    const res = await worker.fetch(
+      req("https://app.example/api/lists", { method: "POST", body: JSON.stringify({ name: "Mes courses" }) }),
+      makeEnv(handler),
+    );
+    expect(calls[0].url).toBe("https://list.internal/state");
+    const init = calls.find((c) => c.url === "https://list.internal/init")!;
+    expect(init.method).toBe("POST");
+    expect(init.contentType).toBe("application/json");
+    expect(init.code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    expect(init.body).toEqual({ code: init.code, name: "Mes courses" });
+    expect(res.headers.get("content-type")).toBe("application/json");
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+
+  it("ne crée pas de liste sur un GET /api/lists", async () => {
+    const { calls, handler } = recorder();
+    const res = await worker.fetch(req("https://app.example/api/lists"), makeEnv(handler));
+    expect(res.status).toBe(404);
+    expect(calls).toEqual([]);
+  });
+
+  it("répond au préflight CORS sous /api/ seulement", async () => {
+    const env = makeEnv(() => Response.json({}));
+    const api = await worker.fetch(req("https://app.example/api/lists", { method: "OPTIONS" }), env);
+    expect(api.status).toBe(204);
+    const other = await worker.fetch(req("https://app.example/page", { method: "OPTIONS" }), env);
+    expect(await other.text()).toBe("asset");
+  });
+
+  it("ignore les chemins qui contiennent une route sans la commencer", async () => {
+    const { calls, handler } = recorder();
+    const env = makeEnv(handler);
+    for (const path of ["/x/api/lists/ABCDEF", "/x/api/lists/ABCDEF/photos", "/x/api/lists/ABCDEF/photos/p1"]) {
+      for (const method of ["GET", "POST"]) {
+        const res = await worker.fetch(req(`https://app.example${path}`, { method, body: method === "POST" ? "x" : undefined }), env);
+        expect(await res.text()).toBe("asset");
+      }
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("ne traite pas une route photo avec un suffixe en trop", async () => {
+    const { calls, handler } = recorder();
+    const env = makeEnv(handler);
+    const upload = await worker.fetch(req("https://app.example/api/lists/ABCDEF/photos/extra/more", { method: "POST", body: "x" }), env);
+    expect(upload.status).toBe(404);
+    const get = await worker.fetch(req("https://app.example/api/lists/ABCDEF/photos/p1/extra"), env);
+    expect(get.status).toBe(404);
+    expect(await get.text()).toBe("Not found");
+    const upload2 = await worker.fetch(req("https://app.example/api/lists/ABCDEF/photos/", { method: "POST", body: "x" }), env);
+    expect(upload2.status).toBe(404);
+    expect(calls).toEqual([]);
+  });
+
+  it("une route photo n'accepte que la bonne méthode", async () => {
+    const { calls, handler } = recorder();
+    const env = makeEnv(handler);
+    const getOnUpload = await worker.fetch(req("https://app.example/api/lists/ABCDEF/photos"), env);
+    expect(getOnUpload.status).toBe(404);
+    const postOnPhoto = await worker.fetch(req("https://app.example/api/lists/ABCDEF/photos/p1", { method: "POST", body: "x" }), env);
+    expect(postOnPhoto.status).toBe(404);
+    expect(await postOnPhoto.text()).toBe("Not found");
+    expect(calls).toEqual([]);
+  });
+
+  it("lit l'état via /state", async () => {
+    const { calls, handler } = recorder();
+    await worker.fetch(req("https://app.example/api/lists/abcdef"), makeEnv(handler));
+    expect(calls).toEqual([expect.objectContaining({ code: "ABCDEF", url: "https://list.internal/state" })]);
+  });
+
+  it("upload photo : vérifie la liste via /state et renvoie un JSON { id }", async () => {
+    const { calls, handler } = recorder();
+    const res = await worker.fetch(
+      req("https://app.example/api/lists/abcdef/photos", { method: "POST", headers: { "content-type": "image/png" }, body: new Uint8Array([1, 2]) }),
+      makeEnv(handler),
+    );
+    expect(calls).toEqual([expect.objectContaining({ code: "ABCDEF", url: "https://list.internal/state" })]);
+    expect(res.headers.get("content-type")).toBe("application/json");
+    expect(typeof (await readJson(res)).id).toBe("string");
+  });
+
+  it("upload photo : messages d'erreur et limite de taille incluse", async () => {
+    const { MAX_PHOTO_BYTES } = await import("../shared/photo");
+    const url = "https://app.example/api/lists/ABCDEF/photos";
+    const png = { "content-type": "image/png" };
+
+    const missing = await worker.fetch(
+      req(url, { method: "POST", headers: png, body: "x" }),
+      makeEnv(recorder(() => new Response("no", { status: 404 })).handler),
+    );
+    expect(missing.status).toBe(404);
+    expect(await missing.text()).toBe("Liste introuvable.");
+
+    const wrongType = await worker.fetch(req(url, { method: "POST", headers: { "content-type": "text/html" }, body: "x" }), makeEnv(recorder().handler));
+    expect(wrongType.status).toBe(415);
+    expect(await wrongType.text()).toBe("Type de fichier non pris en charge.");
+
+    const empty = await worker.fetch(req(url, { method: "POST", headers: png, body: new Uint8Array(0) }), makeEnv(recorder().handler));
+    expect(empty.status).toBe(413);
+    expect(await empty.text()).toBe("Photo trop volumineuse.");
+
+    const exact = await worker.fetch(req(url, { method: "POST", headers: png, body: new Uint8Array(MAX_PHOTO_BYTES) }), makeEnv(recorder().handler));
+    expect(exact.status).toBe(200);
+
+    const tooBig = await worker.fetch(req(url, { method: "POST", headers: png, body: new Uint8Array(MAX_PHOTO_BYTES + 1) }), makeEnv(recorder().handler));
+    expect(tooBig.status).toBe(413);
+    expect(await tooBig.text()).toBe("Photo trop volumineuse.");
+  });
+
+  it("lecture photo : 404 « Photo introuvable. » si absente", async () => {
+    const res = await worker.fetch(req("https://app.example/api/lists/ABCDEF/photos/p1"), makeEnv(() => Response.json({})));
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("Photo introuvable.");
+  });
+});

@@ -24,7 +24,7 @@ function generateCode(length = 6): string {
 }
 
 function normalizeCode(code: string): string {
-  return code.trim().toUpperCase();
+  return code.toUpperCase();
 }
 
 // Autorise l'appel depuis une origine différente (client servi par GitHub

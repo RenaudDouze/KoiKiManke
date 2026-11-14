@@ -58,9 +58,9 @@ export default {
   ],
   ignorePatterns: ["dist", "coverage", "mutation-report", "playwright-report", "test-results", ".wrangler"],
   thresholds: {
-    high: 95,
-    low: 85,
-    break: 80,
+    high: 100,
+    low: 100,
+    break: 100,
   },
   tempDirName: ".stryker-tmp",
   cleanTempDir: true,

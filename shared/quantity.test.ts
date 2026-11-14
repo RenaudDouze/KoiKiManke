@@ -78,3 +78,40 @@ describe("parseFreeText", () => {
     expect(parseFreeText("7up")).toEqual({ name: "7up", quantity: "" });
   });
 });
+
+describe("parseFreeText : motifs exacts", () => {
+  const cases: [string, { name: string; quantity: string }][] = [
+    ["", { name: "", quantity: "" }],
+    ["2 pommes rouges", { name: "pommes rouges", quantity: "2" }],
+    ["12 kg pommes", { name: "pommes", quantity: "12 kg" }],
+    ["1.25 kg pommes", { name: "pommes", quantity: "1.25 kg" }],
+    ["2,5 kg pommes", { name: "pommes", quantity: "2.5 kg" }],
+    ["2,5kg pommes", { name: "pommes", quantity: "2.5 kg" }],
+    ["2 KG pommes", { name: "pommes", quantity: "2 kg" }],
+    ["2 Kg pommes rouges", { name: "pommes rouges", quantity: "2 kg" }],
+    ["pommes rouges 2 kg", { name: "pommes rouges", quantity: "2 kg" }],
+    ["abc2 kg pommes", { name: "abc2 kg pommes", quantity: "" }],
+    ["2abc kg pommes", { name: "2abc kg pommes", quantity: "" }],
+    ["pommes rouges", { name: "pommes rouges", quantity: "" }],
+    ["2 kg", { name: "", quantity: "2 kg" }],
+    ["2", { name: "2", quantity: "" }],
+    ["x3", { name: "x3", quantity: "" }],
+    ["x12 pommes", { name: "pommes", quantity: "x12" }],
+    ["ax3 pommes", { name: "ax3 pommes", quantity: "" }],
+    ["x3a pommes", { name: "x3a pommes", quantity: "" }],
+    ["12x pommes", { name: "pommes", quantity: "x12" }],
+    ["a3x pommes", { name: "a3x pommes", quantity: "" }],
+    ["3xa pommes", { name: "3xa pommes", quantity: "" }],
+    ["1,5 pommes", { name: "pommes", quantity: "1.5" }],
+    ["12 pommes", { name: "pommes", quantity: "12" }],
+    ["pommes 12", { name: "pommes", quantity: "12" }],
+    ["pommes 1.25", { name: "pommes", quantity: "1.25" }],
+    ["pommes rouges vertes 2", { name: "pommes rouges vertes", quantity: "2" }],
+    ["pommes rouges vertes x2", { name: "pommes rouges vertes", quantity: "x2" }],
+    ["pommes 2abc", { name: "pommes 2abc", quantity: "" }],
+    ["pommes 12 abc", { name: "pommes 12 abc", quantity: "" }],
+  ];
+  it.each(cases)("%j", (raw, expected) => {
+    expect(parseFreeText(raw)).toEqual(expected);
+  });
+});

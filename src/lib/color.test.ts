@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { categoryHue, resolveCategoryHue } from "./color";
 
+describe("categoryHue : valeurs connues", () => {
+  it("applique hash = hash * 31 + code, modulo 360", () => {
+    // "a" -> 97 ; "ab" -> 97 * 31 + 98 = 3105 ; 3105 % 360 = 225
+    expect(categoryHue("a")).toBe(97);
+    expect(categoryHue("ab")).toBe(225);
+  });
+});
+
 describe("categoryHue", () => {
   it("est déterministe pour un même id", () => {
     expect(categoryHue("cat-1")).toBe(categoryHue("cat-1"));

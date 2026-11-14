@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applyMessage, touchHistory, nextOrder, validCategoryId, MAX_HISTORY } from "./reducer";
-import type { ListState } from "../shared/types";
+import type { Category, HistoryEntry, Item, ListState } from "../shared/types";
 
 function makeState(overrides: Partial<ListState> = {}): ListState {
   return {
@@ -13,6 +13,16 @@ function makeState(overrides: Partial<ListState> = {}): ListState {
     updatedAt: 0,
     ...overrides,
   };
+}
+
+function makeItem(overrides: Partial<Item> = {}): Item {
+  return { id: "i1", name: "Lait", quantity: "", categoryId: null, checked: false, order: 0, createdAt: 0, updatedAt: 0, ...overrides };
+}
+function makeCategory(overrides: Partial<Category> = {}): Category {
+  return { id: "c1", name: "Fruits", order: 0, ...overrides };
+}
+function makeEntry(overrides: Partial<HistoryEntry> = {}): HistoryEntry {
+  return { key: "lait", label: "Lait", categoryId: null, useCount: 1, lastUsed: 0, ...overrides };
 }
 
 const NOW = 1_700_000_000_000;
@@ -288,6 +298,14 @@ describe("applyMessage", () => {
       state.items[0].photoId = "old-id";
       applyMessage(state, { type: "updateItem", id: "i1", photoId: "new-id" }, NOW);
       expect(state.items[0].photoId).toBe("new-id");
+    });
+  });
+
+  describe("toggleItem : cible", () => {
+    it("ne coche que l'article visé", () => {
+      const state = makeState({ items: [makeItem({ id: "i1", name: "A" }), makeItem({ id: "i2", name: "B" })] });
+      applyMessage(state, { type: "toggleItem", id: "i2", checked: true }, NOW);
+      expect(state.items.map((i) => i.checked)).toEqual([false, true]);
     });
   });
 
@@ -937,6 +955,220 @@ describe("applyMessage", () => {
       const state = makeState({ history: [entry] });
       applyMessage(state, { type: "restoreHistoryEntry", entry }, NOW);
       expect(state.history).toEqual([entry]);
+    });
+  });
+});
+
+describe("mutation : validations et bornes (compléments)", () => {
+  it("validCategoryId renvoie null pour un id inconnu même quand d'autres catégories existent", () => {
+    const state = makeState({ categories: [makeCategory({ id: "c1" })] });
+    expect(validCategoryId(state, "nope")).toBeNull();
+    expect(validCategoryId(state, "c1")).toBe("c1");
+    expect(validCategoryId(state, null)).toBeNull();
+  });
+
+  it("nextOrder prend le plus grand order, quel que soit l'ordre de la liste", () => {
+    expect(nextOrder([{ order: 5 }, { order: 2 }])).toBe(6);
+    expect(nextOrder([{ order: 2 }, { order: 5 }])).toBe(6);
+  });
+
+  it("addItem remplace un id qui n'est pas une chaîne strictement [A-Za-z0-9_-]{1,64}", () => {
+    for (const id of [123 as unknown as string, "ok id!", "!abc", "abc!", "a".repeat(65), ""]) {
+      const state = makeState();
+      applyMessage(state, { type: "addItem", id, rawText: "Lait", categoryId: null }, NOW);
+      expect(state.items[0].id).not.toBe(id);
+      expect(state.items[0].id).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
+    }
+  });
+
+  it("renameList tronque à 100 caractères, addItem tronque la quantité à 40", () => {
+    const state = makeState();
+    applyMessage(state, { type: "renameList", name: "n".repeat(150) }, NOW);
+    expect(state.name).toBe("n".repeat(100));
+    applyMessage(state, { type: "addItem", id: "i1", rawText: `${"9".repeat(60)}x pommes`, categoryId: null }, NOW);
+    expect(state.items[0].quantity).toBe(`x${"9".repeat(60)}`.slice(0, 40));
+  });
+
+  it("addCategory et renameCategory tronquent à 200 caractères", () => {
+    const state = makeState();
+    applyMessage(state, { type: "addCategory", id: "c1", name: "a".repeat(250) }, NOW);
+    expect(state.categories[0].name).toBe("a".repeat(200));
+    applyMessage(state, { type: "renameCategory", id: "c1", name: "b".repeat(250) }, NOW);
+    expect(state.categories[0].name).toBe("b".repeat(200));
+  });
+
+  describe("updateItem : champs absents et valeurs limites", () => {
+    it("ne touche pas aux champs absents du message", () => {
+      const state = makeState({
+        categories: [makeCategory()],
+        items: [makeItem({ quantity: "2", categoryId: "c1", priority: 2, photoId: "photo-1" })],
+      });
+      applyMessage(state, { type: "updateItem", id: "i1", name: "Nouveau" }, NOW);
+      expect(state.items[0]).toMatchObject({ name: "Nouveau", quantity: "2", categoryId: "c1", priority: 2, photoId: "photo-1" });
+    });
+
+    it("met à jour la quantité, la catégorie (valide, null, inconnue) et la priorité (0, 1, 2 valides)", () => {
+      const state = makeState({ categories: [makeCategory()], items: [makeItem()] });
+      applyMessage(state, { type: "updateItem", id: "i1", quantity: "3" }, NOW);
+      expect(state.items[0].quantity).toBe("3");
+      applyMessage(state, { type: "updateItem", id: "i1", categoryId: "c1" }, NOW);
+      expect(state.items[0].categoryId).toBe("c1");
+      applyMessage(state, { type: "updateItem", id: "i1", categoryId: "nope" }, NOW);
+      expect(state.items[0].categoryId).toBeNull();
+      for (const priority of [0, 1, 2] as const) {
+        applyMessage(state, { type: "updateItem", id: "i1", priority }, NOW);
+        expect(state.items[0].priority).toBe(priority);
+      }
+      applyMessage(state, { type: "updateItem", id: "i1", priority: 7 as unknown as 0 }, NOW);
+      expect(state.items[0].priority).toBe(2);
+    });
+
+    it("modifie le bon article parmi plusieurs", () => {
+      const state = makeState({ items: [makeItem({ id: "i1", name: "A" }), makeItem({ id: "i2", name: "B" })] });
+      applyMessage(state, { type: "updateItem", id: "i2", name: "B2" }, NOW);
+      expect(state.items.map((i) => i.name)).toEqual(["A", "B2"]);
+    });
+  });
+
+  describe("importState : validation des champs importés", () => {
+    const replace = (state: ListState, items: Item[], categories: Category[] = []) =>
+      applyMessage(state, { type: "importState", mode: "replace", data: { name: "", items, categories, history: [] } }, NOW);
+
+    it("remplace un id importé invalide (ancrage début/fin, longueur) et garde un id valide", () => {
+      const bad = ["ok id!", "!abc", "abc!", "a".repeat(65), ""];
+      const state = makeState();
+      replace(state, [...bad.map((id, i) => makeItem({ id, name: `n${i}` })), makeItem({ id: "bon_id-1", name: "ok" })]);
+      for (const item of state.items.slice(0, -1)) {
+        expect(bad).not.toContain(item.id);
+        expect(item.id).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
+      }
+      expect(state.items.at(-1)!.id).toBe("bon_id-1");
+    });
+
+    it("garde les priorités 0, 1, 2 et retire une priorité invalide ou absente", () => {
+      const state = makeState();
+      replace(state, [
+        makeItem({ id: "a", name: "a", priority: 0 }),
+        makeItem({ id: "b", name: "b", priority: 1 }),
+        makeItem({ id: "c", name: "c", priority: 2 }),
+        makeItem({ id: "d", name: "d", priority: 5 as unknown as 0 }),
+        makeItem({ id: "e", name: "e" }),
+      ]);
+      expect(state.items.map((i) => i.priority)).toEqual([0, 1, 2, undefined, undefined]);
+      expect(state.items.map((i) => "priority" in i)).toEqual([true, true, true, false, false]);
+    });
+
+    it("garde une teinte de catégorie valide (0 inclus) et retire une teinte invalide ou absente", () => {
+      const state = makeState();
+      replace(
+        state,
+        [],
+        [
+          makeCategory({ id: "a", name: "a", color: 0 }),
+          makeCategory({ id: "b", name: "b", color: 359 }),
+          makeCategory({ id: "c", name: "c", color: 360 }),
+          makeCategory({ id: "d", name: "d", color: -1 }),
+          makeCategory({ id: "e", name: "e", color: 1.5 }),
+          makeCategory({ id: "f", name: "f", color: "12" as unknown as number }),
+          makeCategory({ id: "g", name: "g" }),
+        ],
+      );
+      expect(state.categories.map((c) => ("color" in c ? c.color : "absent"))).toEqual([0, 359, "absent", "absent", "absent", "absent", "absent"]);
+    });
+
+    it("tronque la quantité importée à 40 caractères", () => {
+      const state = makeState();
+      replace(state, [makeItem({ quantity: "q".repeat(60) })]);
+      expect(state.items[0].quantity).toBe("q".repeat(40));
+    });
+
+    it("mode replace : un nom vide conserve le nom actuel, un nom fourni est tronqué à 100", () => {
+      const state = makeState({ name: "Actuel" });
+      applyMessage(state, { type: "importState", mode: "replace", data: { name: "", items: [], categories: [], history: [] } }, NOW);
+      expect(state.name).toBe("Actuel");
+      applyMessage(state, { type: "importState", mode: "replace", data: { name: "N".repeat(150), items: [], categories: [], history: [] } }, NOW);
+      expect(state.name).toBe("N".repeat(100));
+    });
+
+    it("mode merge : rattache les articles à la catégorie existante de même nom, et fusionne deux catégories importées de même nom", () => {
+      const state = makeState({ categories: [makeCategory({ id: "local", name: "Fruits" })] });
+      applyMessage(
+        state,
+        {
+          type: "importState",
+          mode: "merge",
+          data: {
+            name: "",
+            categories: [makeCategory({ id: "x", name: "fruits" }), makeCategory({ id: "y", name: "Légumes" }), makeCategory({ id: "z", name: "LÉGUMES" })],
+            items: [
+              makeItem({ id: "i1", name: "Pomme", categoryId: "x" }),
+              makeItem({ id: "i2", name: "Poireau", categoryId: "y" }),
+              makeItem({ id: "i3", name: "Carotte", categoryId: "z" }),
+            ],
+            history: [],
+          },
+        },
+        NOW,
+      );
+      expect(state.categories.map((c) => c.name)).toEqual(["Fruits", "Légumes"]);
+      const legumes = state.categories[1].id;
+      expect(state.items.map((i) => i.categoryId)).toEqual(["local", legumes, legumes]);
+    });
+  });
+
+  describe("catégories : suppression ciblée", () => {
+    it("deleteCategory ne retire que la catégorie visée et ne détache que ses articles et suggestions", () => {
+      const state = makeState({
+        categories: [makeCategory({ id: "c1" }), makeCategory({ id: "c2", name: "Autre", order: 1 })],
+        items: [makeItem({ id: "i1", categoryId: "c1" }), makeItem({ id: "i2", name: "B", categoryId: "c2" })],
+        history: [makeEntry({ key: "a", categoryId: "c1" }), makeEntry({ key: "b", categoryId: "c2" })],
+      });
+      applyMessage(state, { type: "deleteCategory", id: "c1" }, NOW);
+      expect(state.categories.map((c) => c.id)).toEqual(["c2"]);
+      expect(state.items.map((i) => i.categoryId)).toEqual([null, "c2"]);
+      expect(state.history.map((h) => h.categoryId)).toEqual([null, "c2"]);
+    });
+  });
+
+  describe("historique", () => {
+    const entries = (count: number, extra: (i: number) => Partial<HistoryEntry> = () => ({})): HistoryEntry[] =>
+      Array.from({ length: count }, (_, i) => makeEntry({ key: `k${i}`, label: `K${i}`, lastUsed: 1000 + i, ...extra(i) }));
+
+    it("sous le plafond (même à MAX_HISTORY exactement) : aucun tri, l'ordre d'insertion est conservé", () => {
+      const state = makeState({ history: [makeEntry({ key: "z", label: "Z", lastUsed: 1 }), makeEntry({ key: "y", label: "Y", lastUsed: 9 })] });
+      touchHistory(state, "x", null, 5);
+      expect(state.history.map((h) => h.key)).toEqual(["z", "y", "x"]);
+
+      const full = makeState({ history: entries(MAX_HISTORY - 1).reverse() });
+      touchHistory(full, "nouveau", null, 5000);
+      expect(full.history).toHaveLength(MAX_HISTORY);
+      expect(full.history[0].key).toBe(`k${MAX_HISTORY - 2}`);
+    });
+
+    it("au-delà du plafond : les favoris restent (sans doublon), le reste est trié du plus récent au plus ancien", () => {
+      const last = MAX_HISTORY - 1;
+      const state = makeState({ history: entries(MAX_HISTORY, (i) => (i === last ? { favorite: true } : {})) });
+      touchHistory(state, "nouveau", null, 9000);
+      expect(state.history).toHaveLength(MAX_HISTORY);
+      expect(state.history.filter((h) => h.key === `k${last}`)).toHaveLength(1);
+      expect(state.history.some((h) => h.key === "k0")).toBe(false);
+      const times = state.history.map((h) => h.lastUsed);
+      expect(times).toEqual([...times].sort((a, b) => b - a));
+      expect(state.history[0].key).toBe("nouveau");
+    });
+
+    it("updateHistoryEntry ne touche pas à la catégorie quand elle est absente du message", () => {
+      const state = makeState({ categories: [makeCategory()], history: [makeEntry({ categoryId: "c1" })] });
+      applyMessage(state, { type: "updateHistoryEntry", key: "lait", label: "Lait entier" }, NOW);
+      expect(state.history[0].categoryId).toBe("c1");
+    });
+
+    it("restoreCategory et restoreHistoryEntry réinsèrent même quand d'autres éléments existent", () => {
+      const state = makeState({ categories: [makeCategory({ id: "c2", name: "Autre" })], history: [makeEntry({ key: "autre" })] });
+      applyMessage(state, { type: "restoreCategory", category: makeCategory({ id: "c1" }), itemIds: [] }, NOW);
+      applyMessage(state, { type: "restoreHistoryEntry", entry: makeEntry({ key: "lait" }) }, NOW);
+      expect(state.categories.map((c) => c.id)).toEqual(["c2", "c1"]);
+      expect(state.history.map((h) => h.key)).toEqual(["autre", "lait"]);
     });
   });
 });

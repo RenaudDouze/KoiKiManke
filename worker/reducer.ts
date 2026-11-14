@@ -31,7 +31,8 @@ function isPriority(value: unknown): value is Priority {
 }
 
 function isValidHue(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 360;
+  // Number.isInteger rejette déjà tout ce qui n'est pas un nombre.
+  return Number.isInteger(value) && (value as number) >= 0 && (value as number) < 360;
 }
 
 function safeString(value: unknown, maxLength: number): string {
@@ -46,7 +47,7 @@ function sanitizeImportedItem(item: Item): Item {
   if (!SAFE_ID.test(String(safe.id))) safe.id = crypto.randomUUID();
   safe.name = safeString(safe.name, MAX_NAME_LENGTH);
   safe.quantity = safeString(safe.quantity, MAX_QUANTITY_LENGTH);
-  if (safe.priority !== undefined && !isPriority(safe.priority)) delete safe.priority;
+  if (!isPriority(safe.priority)) delete safe.priority;
   // Un photoId ne nomme un objet R2 réel que dans la liste qui l'a
   // uploadé (voir worker/photos.ts) : un fichier exporté/un lien compact
   // (potentiellement importé dans une tout autre liste, voir
@@ -60,7 +61,7 @@ function sanitizeImportedCategory(category: Category): Category {
   const safe: Category = { ...category };
   if (!SAFE_ID.test(String(safe.id))) safe.id = crypto.randomUUID();
   safe.name = safeString(safe.name, MAX_NAME_LENGTH);
-  if (safe.color !== undefined && !isValidHue(safe.color)) delete safe.color;
+  if (!isValidHue(safe.color)) delete safe.color;
   return safe;
 }
 
@@ -70,7 +71,7 @@ export function nextOrder(list: { order: number }[]): number {
   // (Math.max(...arr) plante au-delà de plusieurs dizaines de milliers
   // d'éléments selon le moteur).
   let max = -1;
-  for (const x of list) if (x.order > max) max = x.order;
+  for (const x of list) max = Math.max(max, x.order);
   return max + 1;
 }
 
@@ -78,7 +79,6 @@ export function nextOrder(list: { order: number }[]): number {
  * trust one carried over from history or an import, since its category may
  * since have been deleted (or, for an import, never existed in this list). */
 export function validCategoryId(state: ListState, id: string | null): string | null {
-  if (id === null) return null;
   return state.categories.some((c) => c.id === id) ? id : null;
 }
 
@@ -108,8 +108,8 @@ export function touchHistory(state: ListState, label: string, categoryId: string
 /** Mutates `state` in place to apply one client message. */
 export function applyMessage(state: ListState, msg: ClientMessage, now: number = Date.now()): void {
   switch (msg.type) {
-    case "sync":
-      return;
+    // "sync" ne mute rien : aucun `case` nécessaire, un type non reconnu
+    // sort simplement du switch sans effet.
 
     case "renameList": {
       const name = msg.name.trim();
@@ -141,16 +141,15 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
       if (msg.name !== undefined) item.name = safeString(msg.name, MAX_NAME_LENGTH);
       if (msg.quantity !== undefined) item.quantity = safeString(msg.quantity, MAX_QUANTITY_LENGTH);
       if (msg.categoryId !== undefined) item.categoryId = validCategoryId(state, msg.categoryId);
-      if (msg.priority !== undefined && isPriority(msg.priority)) item.priority = msg.priority;
-      if (msg.photoId !== undefined) {
-        // null = retire la photo ; une chaîne invalide (message forgé à la
-        // main) est ignorée plutôt que d'en inventer une nouvelle — un id
-        // fabriqué ne correspondrait à aucun objet réel du bucket R2 (voir
-        // worker/photos.ts), contrairement à safeId() ailleurs dans ce
-        // fichier qui, lui, doit toujours produire un id d'ITEM valide.
-        if (msg.photoId === null) delete item.photoId;
-        else if (isSafePhotoId(msg.photoId)) item.photoId = msg.photoId;
-      }
+      if (isPriority(msg.priority)) item.priority = msg.priority;
+      // photoId absent (undefined) : ni null ni id valide, donc sans effet.
+      // null = retire la photo ; une chaîne invalide (message forgé à la
+      // main) est ignorée plutôt que d'en inventer une nouvelle — un id
+      // fabriqué ne correspondrait à aucun objet réel du bucket R2 (voir
+      // worker/photos.ts), contrairement à safeId() ailleurs dans ce
+      // fichier qui, lui, doit toujours produire un id d'ITEM valide.
+      if (msg.photoId === null) delete item.photoId;
+      else if (isSafePhotoId(msg.photoId)) item.photoId = msg.photoId;
       item.updatedAt = now;
       return;
     }
@@ -245,7 +244,7 @@ export function applyMessage(state: ListState, msg: ClientMessage, now: number =
         state.items = items;
         state.categories = categories;
         state.history = msg.data.history;
-        if (msg.data.name) state.name = safeString(msg.data.name, MAX_LIST_NAME_LENGTH) || state.name;
+        state.name = safeString(msg.data.name, MAX_LIST_NAME_LENGTH) || state.name;
       } else {
         const existingCategoryNames = new Map(state.categories.map((c) => [c.name.toLowerCase(), c.id]));
         const categoryIdMap = new Map<string, string | null>();

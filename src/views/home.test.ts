@@ -322,4 +322,150 @@ describe("mountHomeView", () => {
       expect(navigate).not.toHaveBeenCalled();
     });
   });
+  describe("détails de rendu et de comportement", () => {
+    const submit = (form: Element) => {
+      const event = new Event("submit", { bubbles: true, cancelable: true });
+      form.dispatchEvent(event);
+      return event;
+    };
+    const strayText = () =>
+      Array.from(root.querySelectorAll(".home, .card, .recent-list")).flatMap((el) =>
+        Array.from(el.childNodes)
+          .filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== "")
+          .map((n) => n.textContent),
+      );
+    const deferred = <T,>() => {
+      let resolve!: (v: T) => void;
+      let reject!: (e: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    };
+    const fav = (code: string, favorite: boolean): RecentList => ({ code, name: `Liste ${code}`, favorite, lastOpened: 1 });
+
+    it("n'insère aucun texte parasite, quelle que soit la combinaison de listes récentes", () => {
+      for (const lists of [[], [fav("AAAAAA", true), fav("BBBBBB", true)], [fav("CCCCCC", false), fav("DDDDDD", false)], [fav("AAAAAA", true), fav("BBBBBB", true), fav("CCCCCC", false), fav("DDDDDD", false)]]) {
+        recentLists = lists;
+        mountHomeView(root, navigate);
+        expect(strayText()).toEqual([]);
+      }
+    });
+
+    it("la bannière d'import résume le contenu, avec ou sans nom", () => {
+      const named = encodeListToParam({ name: "Reçue", items: [], categories: [], history: [] });
+      mountHomeView(root, navigate, named);
+      expect(root.querySelector(".import-banner p")!.textContent!.replace(/\s+/g, " ").trim()).toBe(
+        "0 article(s) et 0 catégorie(s) — « Reçue », en aperçu (pas encore une liste synchronisée).",
+      );
+      const unnamed = encodeListToParam({ name: "", items: [], categories: [], history: [] });
+      mountHomeView(root, navigate, unnamed);
+      expect(root.querySelector(".import-banner p")!.textContent!.replace(/\s+/g, " ").trim()).toBe(
+        "0 article(s) et 0 catégorie(s), en aperçu (pas encore une liste synchronisée).",
+      );
+      expect(strayText()).toEqual([]);
+    });
+
+    it("libellé et état des boutons favori", () => {
+      recentLists = [fav("AAAAAA", true), fav("BBBBBB", false)];
+      mountHomeView(root, navigate);
+      const on = root.querySelector('.recent-favorite[data-code="AAAAAA"]')!;
+      const off = root.querySelector('.recent-favorite[data-code="BBBBBB"]')!;
+      expect(on.getAttribute("aria-label")).toBe("Retirer des favoris");
+      expect(on.getAttribute("aria-pressed")).toBe("true");
+      expect(off.getAttribute("aria-label")).toBe("Ajouter aux favoris");
+      expect(off.getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("le bouton de thème affiche l'icône du thème courant", () => {
+      for (const [theme, label] of [["system", "Auto"], ["light", "Clair"], ["dark", "Sombre"]] as const) {
+        localStorage.setItem("nldc:theme", theme);
+        mountHomeView(root, navigate);
+        const btn = root.querySelector("#theme-toggle")!;
+        expect(btn.getAttribute("aria-label")).toBe(`Thème : ${label}`);
+        expect(btn.querySelector("svg")).not.toBeNull();
+        expect(btn.textContent).not.toContain("undefined");
+        root.dataset[theme] = btn.innerHTML.replace(/\s+/g, " ");
+      }
+      expect(new Set(Object.values(root.dataset)).size).toBe(3);
+    });
+
+    it("les deux formulaires bloquent l'envoi natif du navigateur", () => {
+      mountHomeView(root, navigate);
+      expect(submit(root.querySelector("#create-form")!).defaultPrevented).toBe(true);
+      expect(submit(root.querySelector("#join-form")!).defaultPrevented).toBe(true);
+    });
+
+    it("création : bouton désactivé pendant l'appel, nom recadré, message d'échec exact", async () => {
+      const call = deferred<ListState>();
+      createList.mockReturnValue(call.promise);
+      mountHomeView(root, navigate);
+      const btn = root.querySelector("#create-form button") as HTMLButtonElement;
+      (root.querySelector("#create-name") as HTMLInputElement).value = "  Ma liste  ";
+
+      submit(root.querySelector("#create-form")!);
+      expect(btn.disabled).toBe(true);
+      expect(createList).toHaveBeenCalledWith("Ma liste");
+
+      call.reject(new Error("réseau"));
+      await vi.waitFor(() => expect(alert).toHaveBeenCalledWith("Impossible de créer la liste. Vérifie ta connexion internet."));
+    });
+
+    it("rejoindre : code recadré, bouton désactivé pendant l'appel, erreur masquée à chaque tentative", async () => {
+      fetchListState.mockResolvedValueOnce(null);
+      mountHomeView(root, navigate);
+      const input = root.querySelector("#join-code") as HTMLInputElement;
+      const error = root.querySelector("#join-error") as HTMLElement;
+      const btn = root.querySelector("#join-form button") as HTMLButtonElement;
+      input.value = "  abc123  ";
+
+      submit(root.querySelector("#join-form")!);
+      await vi.waitFor(() => expect(error.hidden).toBe(false));
+      expect(fetchListState).toHaveBeenCalledWith("ABC123");
+
+      // Une nouvelle tentative (même vide) masque d'abord l'erreur précédente.
+      input.value = "";
+      submit(root.querySelector("#join-form")!);
+      expect(error.hidden).toBe(true);
+
+      const call = deferred<ListState | null>();
+      fetchListState.mockReturnValueOnce(call.promise);
+      input.value = "zzz999";
+      submit(root.querySelector("#join-form")!);
+      expect(btn.disabled).toBe(true);
+      call.resolve(null);
+      await vi.waitFor(() => expect(btn.disabled).toBe(false));
+    });
+
+    it("basculer un favori ou oublier une liste redessine l'accueil", () => {
+      recentLists = [fav("AAAAAA", false)];
+      mountHomeView(root, navigate);
+      const mark = (): void => root.querySelector(".home")!.setAttribute("data-mark", "1");
+      const marked = (): boolean => root.querySelector(".home")!.hasAttribute("data-mark");
+
+      mark();
+      (root.querySelector(".recent-favorite") as HTMLButtonElement).click();
+      expect(marked()).toBe(false);
+
+      mark();
+      (root.querySelector(".recent-forget") as HTMLButtonElement).click();
+      expect(marked()).toBe(false);
+    });
+
+    it("l'import : bouton désactivé pendant la création, nom recadré, message d'échec exact", async () => {
+      const encoded = encodeListToParam({ name: "  Perso  ", items: [], categories: [], history: [] });
+      const call = deferred<ListState>();
+      createList.mockReturnValue(call.promise);
+      mountHomeView(root, navigate, encoded);
+      const btn = root.querySelector("#import-banner-create") as HTMLButtonElement;
+
+      btn.click();
+      expect(btn.disabled).toBe(true);
+      expect(createList).toHaveBeenCalledWith("Perso");
+
+      call.reject(new Error("réseau"));
+      await vi.waitFor(() => expect(alert).toHaveBeenCalledWith("Impossible de créer la liste. Vérifie ta connexion internet."));
+    });
+  });
 });

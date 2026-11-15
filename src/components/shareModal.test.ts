@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openShareModal } from "./shareModal";
 import { decodeListFromParam } from "../lib/compactShare";
+import { renderQrSvg } from "./qr";
 import type { ImportPayload } from "../lib/importExport";
 
 vi.mock("./qr", () => ({
@@ -320,6 +321,56 @@ describe("openShareModal", () => {
       await flushPromises();
 
       expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    });
+  });
+  describe("détails", () => {
+    it("sans API de partage native, la rangée d'actions ne contient que copier lien/code", () => {
+      open();
+      const row = document.querySelector(".share-actions") as HTMLElement;
+      expect(row.textContent!.replace(/\s+/g, " ").trim()).toBe("Copier le lien Copier le code");
+      expect(document.querySelector("#native-share")).toBeNull();
+    });
+
+    it("à la fermeture, retire l'écouteur clavier et rend le focus à l'élément précédent", () => {
+      const outside = document.createElement("button");
+      document.body.appendChild(outside);
+      outside.focus();
+      const remove = vi.spyOn(document, "removeEventListener");
+      open();
+
+      (document.querySelector(".modal-close") as HTMLElement).click();
+
+      expect(remove.mock.calls.map(([type]) => type)).toContain("keydown");
+      expect(document.activeElement).toBe(outside);
+    });
+
+    it("ne génère le QR compact qu'une fois, même après repli puis dépli", async () => {
+      open();
+      await vi.waitFor(() => expect(document.querySelector("#qr-wrap")?.innerHTML).toContain("<svg"));
+      const toggle = document.querySelector("#toggle-compact-share") as HTMLButtonElement;
+      const calls = () => vi.mocked(renderQrSvg).mock.calls.length;
+      const before = calls();
+
+      toggle.click();
+      await vi.waitFor(() => expect(calls()).toBe(before + 1));
+      toggle.click();
+      toggle.click();
+      for (let n = 0; n < 20; n++) await flushPromises();
+
+      expect(calls()).toBe(before + 1);
+    });
+
+    it("le lien compact pointe vers la racine de l'app, sous-chemin de déploiement compris", async () => {
+      vi.stubEnv("BASE_URL", "/koikimanke/");
+      vi.resetModules();
+      const { openShareModal: openWithBase } = await import("./shareModal");
+      openWithBase("ABCDEF", "Courses", samplePayload(), { onExport: vi.fn(), onImportFile: vi.fn() });
+
+      (document.querySelector("#toggle-compact-share") as HTMLButtonElement).click();
+
+      const link = document.querySelector("#compact-link")!.textContent!;
+      expect(link.startsWith(`${location.origin}/koikimanke/?import=`)).toBe(true);
+      vi.unstubAllEnvs();
     });
   });
 });

@@ -156,4 +156,95 @@ describe("trapFocus", () => {
     spy.mockRestore();
     expect(() => release()).not.toThrow();
   });
+
+  function setup(count: number, visible: boolean[] = []): HTMLButtonElement[] {
+    const buttons = Array.from({ length: count }, () => document.createElement("button"));
+    container.append(...buttons);
+    buttons.forEach((b, i) => {
+      if (visible[i] ?? true) makeVisible(b);
+    });
+    return buttons;
+  }
+  const tab = (shiftKey = false) => new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true });
+
+  it("saute les éléments non affichés (sans offsetParent) à l'activation", () => {
+    const [hidden, shown] = setup(2, [false, true]);
+    trapFocus(container);
+    expect(hidden).not.toBe(document.activeElement);
+    expect(document.activeElement).toBe(shown);
+  });
+
+  it("un élément focalisé mais sans offsetParent reste le premier du cycle", () => {
+    const [first, , last] = setup(3, [false, true, true]);
+    first.focus();
+    trapFocus(container);
+    first.focus();
+
+    const event = tab(true);
+    container.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(last);
+  });
+
+  it("un élément masqué non focalisé n'est pas dans le cycle", () => {
+    const [first, hidden] = setup(2, [true, false]);
+    trapFocus(container);
+    first.focus();
+
+    const event = tab();
+    container.dispatchEvent(event);
+
+    // `first` est aussi le dernier élément affiché : Tab reboucle sur lui-même.
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).not.toBe(hidden);
+  });
+
+  it("Tab depuis le premier élément (sans Maj) ne fait rien", () => {
+    const [first] = setup(3);
+    trapFocus(container);
+    first.focus();
+
+    const event = tab();
+    container.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(first);
+  });
+
+  it("Maj+Tab au milieu ne fait rien", () => {
+    const [, middle] = setup(3);
+    trapFocus(container);
+    middle.focus();
+
+    const event = tab(true);
+    container.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(middle);
+  });
+
+  it("Maj+Tab depuis le dernier ne fait rien", () => {
+    const [, , last] = setup(3);
+    trapFocus(container);
+    last.focus();
+
+    const event = tab(true);
+    container.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("après le nettoyage, Tab depuis le dernier élément n'est plus piégé", () => {
+    const [, last] = setup(2);
+    const release = trapFocus(container);
+    release();
+    last.focus();
+
+    const event = tab();
+    container.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(last);
+  });
 });

@@ -14,6 +14,43 @@ export const targets = {
   'src/lib/color.ts': ['src/lib/color.test.ts'],
   'src/lib/sort.ts': ['src/lib/sort.test.ts'],
   'src/lib/compactShare.ts': ['src/lib/compactShare.test.ts'],
+  'src/lib/accessibilityPreference.ts': ['src/lib/accessibilityPreference.test.ts'],
+  'src/lib/basePath.ts': ['src/lib/basePath.test.ts'],
+  'src/lib/confirmClick.ts': ['src/lib/confirmClick.test.ts'],
+  'src/lib/dnd.ts': ['src/lib/dnd.test.ts'],
+  'src/lib/dom.ts': ['src/lib/dom.test.ts'],
+  'src/lib/editable.ts': ['src/lib/editable.test.ts'],
+  'src/lib/focusTrap.ts': ['src/lib/focusTrap.test.ts'],
+  'src/lib/hideCheckedPreference.ts': ['src/lib/hideCheckedPreference.test.ts'],
+  'src/lib/http.ts': ['src/lib/http.test.ts'],
+  'src/lib/icons.ts': ['src/lib/icons.test.ts'],
+  'src/lib/id.ts': ['src/lib/id.test.ts'],
+  'src/lib/importExport.ts': ['src/lib/importExport.test.ts'],
+  'src/lib/itemSortPreference.ts': ['src/lib/itemSortPreference.test.ts'],
+  'src/lib/keyboardInset.ts': ['src/lib/keyboardInset.test.ts'],
+  'src/lib/notifications.ts': ['src/lib/notifications.test.ts'],
+  'src/lib/presence.ts': ['src/lib/presence.test.ts'],
+  'src/lib/privacyHint.ts': ['src/lib/privacyHint.test.ts'],
+  'src/lib/storage.ts': ['src/lib/storage.test.ts'],
+  'src/lib/swipe.ts': ['src/lib/swipe.test.ts'],
+  'src/lib/syncWorker.ts': ['src/lib/syncWorker.test.ts'],
+  'src/lib/theme.ts': ['src/lib/theme.test.ts'],
+  'src/lib/ws.ts': ['src/lib/ws.test.ts'],
+  'src/components/accessibilityModal.ts': ['src/components/accessibilityModal.test.ts'],
+  'src/components/qr.ts': ['src/components/qr.test.ts'],
+  'src/components/shareModal.ts': ['src/components/shareModal.test.ts'],
+  'src/main.ts': ['src/main.test.ts'],
+  'src/views/home.ts': ['src/views/home.test.ts'],
+  'src/views/list.ts:1-150': ['src/views/list.test.ts'],
+  'src/views/list.ts:151-300': ['src/views/list.test.ts'],
+  'src/views/list.ts:301-450': ['src/views/list.test.ts'],
+  'src/views/list.ts:451-600': ['src/views/list.test.ts'],
+  'src/views/list.ts:601-750': ['src/views/list.test.ts'],
+  'src/views/list.ts:751-900': ['src/views/list.test.ts'],
+  'src/views/list.ts:901-1050': ['src/views/list.test.ts'],
+  'src/views/list.ts:1051-1200': ['src/views/list.test.ts'],
+  'src/views/list.ts:1201-1350': ['src/views/list.test.ts'],
+  'src/views/list.ts:1351-1405': ['src/views/list.test.ts'],
 };
 
 const selected = process.env.MUTATE ? process.env.MUTATE.split(',') : Object.keys(targets);
@@ -45,18 +82,13 @@ export default {
   htmlReporter: {
     fileName: "mutation-report/index.html",
   },
-  // Périmètre volontairement plus restreint que la couverture 100% de
-  // vitest.config.ts (qui, elle, couvre tout le dépôt y compris les vues
-  // DOM) : seulement la logique pure, là où un test unitaire ciblé et
-  // rapide existe déjà pour tuer chaque mutant (voir `commandRunner`
-  // ci-dessus, dont la liste de fichiers doit rester synchronisée avec
-  // celle-ci). Un temps passé à étendre ce périmètre à tout src/ (comme
-  // OnMangeQuoi ne le fait pas non plus, pour la même raison) a montré en
-  // pratique ~2937 mutants et ~3h30 de CI par PR avec le runner "command"
-  // (qui relance une commande complète par mutant, sans sélection de tests
-  // fine) : un coût jugé disproportionné une fois observé, revenu en
-  // arrière au profit de ce périmètre plus restreint mais rapide (~2s par
-  // mutant plutôt que ~15-20s).
+  // Périmètre : tout le code testé de shared/, worker/ et src/, y compris les
+  // vues DOM (jsdom). Exclus, comme de la couverture (vitest.config.ts) :
+  // shared/types.ts (types seuls) et worker/listRoom.ts (couche Durable
+  // Object, couverte par les tests e2e). `src/views/list.ts` est découpé en
+  // plages de lignes (`fichier:début-fin`), un job de CI chacune : un seul
+  // job durerait plus de 15 minutes. La liste de fichiers du `commandRunner`
+  // ci-dessus vient de `targets`, donc reste synchronisée.
   mutate: selected,
   ignorePatterns: ["dist", "coverage", "mutation-report", "playwright-report", "test-results", ".wrangler"],
   thresholds: {

@@ -166,4 +166,26 @@ describe("notifications", () => {
       await expect(notifyItemAdded("Pommes", "", "Courses")).resolves.toBeUndefined();
     });
   });
+
+  describe("cas limites", () => {
+    it("\"unsupported\" si window n'existe pas", () => {
+      vi.stubGlobal("window", undefined);
+      expect(getNotificationStatus()).toBe("unsupported");
+    });
+
+    it("ne considère comme activée que la valeur stockée exacte \"on\"", () => {
+      stubNotification("granted");
+      localStorage.setItem("nldc:pref:notifications", "off");
+      expect(getNotificationStatus()).toBe("off");
+      localStorage.setItem("nldc:pref:notifications", "");
+      expect(getNotificationStatus()).toBe("off");
+    });
+
+    it("désactiver écrit \"off\" dans le stockage", async () => {
+      stubNotification("granted");
+      localStorage.setItem("nldc:pref:notifications", "on");
+      await toggleNotifications();
+      expect(localStorage.getItem("nldc:pref:notifications")).toBe("off");
+    });
+  });
 });

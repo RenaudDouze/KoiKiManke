@@ -69,6 +69,25 @@ describe("exportListState", () => {
       expect(typeof parsed.exportedAt).toBe("number");
     });
   });
+  it("exporte un fichier application/json", () => {
+    exportListState(state());
+    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    expect(blob.type).toBe("application/json");
+  });
+
+  it("retire tous les accents du nom pour le slug, pas seulement le premier", () => {
+    exportListState(state({ name: "  Crème brûlée  " }));
+    expect(captured?.download).toMatch(/^creme-brulee-\d{4}-\d{2}-\d{2}\.json$/);
+  });
+
+  it("attache le lien au document pendant le clic (requis par certains navigateurs)", () => {
+    let connected = false;
+    clickSpy.mockImplementation(function (this: HTMLAnchorElement) {
+      connected = this.isConnected;
+    });
+    exportListState(state());
+    expect(connected).toBe(true);
+  });
 });
 
 describe("parseImportFile", () => {
@@ -101,4 +120,5 @@ describe("parseImportFile", () => {
     const file = new File([JSON.stringify({ items: "pas un tableau", categories: [] })], "export.json");
     await expect(parseImportFile(file)).rejects.toThrow("Ce fichier ne ressemble pas à un export de liste de courses.");
   });
+
 });

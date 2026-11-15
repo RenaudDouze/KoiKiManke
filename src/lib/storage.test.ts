@@ -128,6 +128,11 @@ describe("storage", () => {
   });
 
   describe("cacheListState / getCachedListState", () => {
+    it("écrit le cache sous la clé « nldc:cache:CODE »", () => {
+      cacheListState(sampleState);
+      expect(localStorage.getItem(`nldc:cache:${sampleState.code}`)).not.toBeNull();
+    });
+
     it("relit exactement l'état mis en cache", () => {
       cacheListState(sampleState);
       expect(getCachedListState("ABCDEF")).toEqual(sampleState);

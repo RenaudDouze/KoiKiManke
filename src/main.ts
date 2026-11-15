@@ -11,10 +11,10 @@ applyAccessibilityPreference(getAccessibilityPreference());
 
 const app = document.getElementById("app")!;
 let cleanup: (() => void) | null = null;
-// Incrémenté à chaque render() : si une navigation plus récente a démarré
+// Remplacé à chaque render() : si une navigation plus récente a démarré
 // pendant qu'un chunk se chargeait, la réponse obsolète ne doit ni monter sa
 // vue ni écraser `cleanup` de la navigation qui l'a entre-temps remplacée.
-let renderToken = 0;
+let latestRender: object;
 
 function navigate(path: string, replace = false): void {
   const target = appPath(path);
@@ -31,7 +31,8 @@ function navigate(path: string, replace = false): void {
 // l'autre. L'ancienne vue reste affichée le temps du chargement (cleanup()
 // n'est appelé qu'une fois la nouvelle prête), donc pas d'écran vide.
 async function render(): Promise<void> {
-  const token = ++renderToken;
+  const token = {};
+  latestRender = token;
   const match = routePath().match(/^\/l\/([A-Za-z0-9]+)\/?$/);
 
   // Lien/QR compact (voir src/lib/compactShare.ts) : `?import=...` est retiré
@@ -46,12 +47,12 @@ async function render(): Promise<void> {
 
   if (match) {
     const { mountListView } = await import("./views/list");
-    if (token !== renderToken) return;
+    if (token !== latestRender) return;
     cleanup?.();
     cleanup = mountListView(app, match[1].toUpperCase(), navigate, importParam);
   } else {
     const { mountHomeView } = await import("./views/home");
-    if (token !== renderToken) return;
+    if (token !== latestRender) return;
     cleanup?.();
     cleanup = mountHomeView(app, navigate, importParam);
   }

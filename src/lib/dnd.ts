@@ -21,7 +21,7 @@ export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): 
   let pendingY = 0;
 
   function onPointerDown(e: PointerEvent) {
-    if (e.button !== undefined && e.button !== 0) return;
+    if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     const handle = target.closest(opts.handleSelector) as HTMLElement | null;
     if (!handle || !root.contains(handle)) return;
@@ -60,14 +60,18 @@ export function enableDragReorder(root: HTMLElement, opts: DragReorderOptions): 
     dragEl.style.pointerEvents = prevPointerEvents;
     if (!overEl) return;
 
-    const container = overEl.closest<HTMLElement>(opts.containerSelector);
-    if (!container || !root.contains(container)) return;
+    const container = overEl.closest<HTMLElement>(opts.containerSelector)!;
+    // `root.contains(null)` vaut faux : un survol hors de tout conteneur
+    // s'arrête ici, `container` est donc non nul au-delà.
+    if (!root.contains(container)) return;
 
     const overItem = overEl.closest(opts.itemSelector) as HTMLElement | null;
-    if (overItem && overItem !== dragEl && container.contains(overItem)) {
-      const rect = overItem.getBoundingClientRect();
+    // Survoler l'article déplacé lui-même ne change rien (insertBefore(x, x)
+    // est sans effet) ; `contains(null)` vaut faux quand aucun article n'est survolé.
+    if (container.contains(overItem)) {
+      const rect = overItem!.getBoundingClientRect();
       const before = pendingY < rect.top + rect.height / 2;
-      container.insertBefore(dragEl, before ? overItem : overItem.nextSibling);
+      container.insertBefore(dragEl, before ? overItem : overItem!.nextSibling);
     } else if (!overItem && !container.contains(dragEl)) {
       container.appendChild(dragEl);
     }

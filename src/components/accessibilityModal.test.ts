@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openAccessibilityModal } from "./accessibilityModal";
 import { getAccessibilityPreference, setAccessibilityPreference } from "../lib/accessibilityPreference";
 
@@ -105,5 +105,33 @@ describe("openAccessibilityModal", () => {
     modal.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
     expect(document.querySelector(".modal-overlay")).not.toBeNull();
+  });
+
+  it("affiche libellé et description de chaque réglage, sans texte parasite entre les lignes", () => {
+    openAccessibilityModal();
+    const rows = Array.from(document.querySelectorAll(".accessibility-option"));
+    expect(rows.map((r) => [r.querySelector("strong")!.textContent, r.querySelector("small")!.textContent])).toEqual([
+      ["Texte plus grand", "Agrandit textes, icônes et zones cliquables."],
+      ["Contraste élevé", "Renforce le contraste des textes et bordures."],
+      ["Réduire les animations", "Coupe les transitions et animations."],
+    ]);
+    const list = document.querySelector(".accessibility-options")!;
+    const stray = Array.from(list.childNodes).filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== "");
+    expect(stray).toHaveLength(0);
+  });
+
+  it("à la fermeture, retire l'écouteur clavier et rend le focus à l'élément précédent", () => {
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    outside.focus();
+    const remove = vi.spyOn(document, "removeEventListener");
+    openAccessibilityModal();
+    expect(document.activeElement).not.toBe(outside);
+
+    (document.querySelector(".modal-close") as HTMLElement).click();
+
+    expect(remove.mock.calls.map(([type]) => type)).toContain("keydown");
+    expect(document.activeElement).toBe(outside);
+    remove.mockRestore();
   });
 });

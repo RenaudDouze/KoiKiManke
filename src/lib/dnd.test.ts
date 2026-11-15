@@ -169,13 +169,15 @@ describe("enableDragReorder", () => {
     const outside = document.createElement("div");
     outside.className = "item-list";
     document.body.appendChild(outside);
+    const dragged = item(0);
     handle(0).dispatchEvent(pointerEvent("pointerdown"));
     stubElementFromPoint(outside);
 
     document.dispatchEvent(pointerEvent("pointermove", { clientX: 0, clientY: 0 }));
     flushRaf();
 
-    expect(root.contains(item(0))).toBe(true);
+    expect(root.contains(dragged)).toBe(true);
+    expect(outside.contains(dragged)).toBe(false);
   });
 
   it("le relâchement retire la classe et notifie onDrop", () => {
@@ -251,5 +253,143 @@ describe("enableDragReorder", () => {
     const preventDefault = vi.spyOn(event, "preventDefault");
     handle(0).dispatchEvent(event);
     expect(preventDefault).not.toHaveBeenCalled();
+  });
+  it("accepte uniquement le bouton principal (0)", () => {
+    handle(0).dispatchEvent(pointerEvent("pointerdown", { button: 2 }));
+    expect(item(0).classList.contains("dragging")).toBe(false);
+  });
+
+  it("ignore une poignée trouvée hors de la racine (ancêtre de la racine)", () => {
+    const outerItem = document.createElement("div");
+    outerItem.className = "item";
+    const outerHandle = document.createElement("div");
+    outerHandle.className = "drag-handle";
+    const nestedRoot = document.createElement("div");
+    nestedRoot.innerHTML = "<span>contenu</span>";
+    outerHandle.appendChild(nestedRoot);
+    outerItem.appendChild(outerHandle);
+    document.body.appendChild(outerItem);
+    const nestedDispose = enableDragReorder(nestedRoot, { containerSelector: ".item-list", itemSelector: ".item", handleSelector: ".drag-handle", onDrop });
+
+    nestedRoot.querySelector("span")!.dispatchEvent(pointerEvent("pointerdown"));
+
+    expect(outerItem.classList.contains("dragging")).toBe(false);
+    nestedDispose();
+  });
+
+  it("capture le pointeur sur la poignée", () => {
+    const setPointerCapture = vi.fn();
+    handle(0).setPointerCapture = setPointerCapture;
+    const event = pointerEvent("pointerdown");
+    Object.defineProperty(event, "pointerId", { value: 7 });
+
+    handle(0).dispatchEvent(event);
+
+    expect(setPointerCapture).toHaveBeenCalledWith(7);
+  });
+
+  it("écoute pointermove en mode non passif (pour pouvoir bloquer le scroll)", () => {
+    const add = vi.spyOn(document, "addEventListener");
+    handle(0).dispatchEvent(pointerEvent("pointerdown"));
+    const call = add.mock.calls.find(([type]) => type === "pointermove");
+    expect(call?.[2]).toStrictEqual({ passive: false });
+  });
+
+  it("empêche le comportement par défaut à chaque pointermove", () => {
+    stubElementFromPoint(item(1));
+    handle(0).dispatchEvent(pointerEvent("pointerdown"));
+    const move = pointerEvent("pointermove", { clientX: 0, clientY: 0 });
+    document.dispatchEvent(move);
+    expect(move.defaultPrevented).toBe(true);
+  });
+
+  it("un pointercancel termine le glisser comme un pointerup, une seule fois", () => {
+    handle(0).dispatchEvent(pointerEvent("pointerdown"));
+
+    document.dispatchEvent(pointerEvent("pointercancel"));
+    expect(onDrop).toHaveBeenCalledOnce();
+    expect(item(0).classList.contains("dragging")).toBe(false);
+
+    // Plus aucun écouteur : un nouveau pointercancel/pointerup ne fait rien.
+    document.dispatchEvent(pointerEvent("pointercancel"));
+    document.dispatchEvent(pointerEvent("pointerup"));
+    expect(onDrop).toHaveBeenCalledOnce();
+  });
+
+  it("après le relâchement, un pointermove ne planifie plus rien", () => {
+    handle(0).dispatchEvent(pointerEvent("pointerdown"));
+    document.dispatchEvent(pointerEvent("pointerup"));
+    const raf = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", raf);
+
+    document.dispatchEvent(pointerEvent("pointermove", { clientX: 0, clientY: 0 }));
+
+    expect(raf).not.toHaveBeenCalled();
+  });
+
+  it("désactive les événements pointeur de l'article déplacé pendant le hit-test, puis les rétablit", () => {
+    const dragged = item(0);
+    dragged.style.pointerEvents = "auto";
+    let during = "";
+    (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint = () => {
+      during = dragged.style.pointerEvents;
+      return item(1);
+    };
+    handle(0).dispatchEvent(pointerEvent("pointerdown"));
+
+    document.dispatchEvent(pointerEvent("pointermove", { clientX: 0, clientY: 0 }));
+    flushRaf();
+
+    expect(during).toBe("none");
+    expect(dragged.style.pointerEvents).toBe("auto");
+  });
+
+  it("ne déplace rien si le hit-test tombe sur un élément sans conteneur", () => {
+    const dragged = item(0);
+    handle(0).dispatchEvent(pointerEvent("pointerdown"));
+    stubElementFromPoint(document.body);
+
+    document.dispatchEvent(pointerEvent("pointermove", { clientX: 0, clientY: 0 }));
+
+    expect(() => flushRaf()).not.toThrow();
+    expect(item(0)).toBe(dragged);
+  });
+
+  it("survoler l'article déplacé lui-même ne change pas l'ordre", () => {
+    handle(0).dispatchEvent(pointerEvent("pointerdown"));
+    stubRect(item(0), { top: 0, height: 40 });
+    stubElementFromPoint(item(0));
+
+    document.dispatchEvent(pointerEvent("pointermove", { clientX: 0, clientY: 35 }));
+    flushRaf();
+
+    expect(Array.from(root.querySelectorAll(".item")).map((el) => el.getAttribute("data-id"))).toEqual(["1", "2"]);
+  });
+
+  it("au milieu exact d'un article, insère après lui", () => {
+    handle(1).dispatchEvent(pointerEvent("pointerdown"));
+    stubRect(item(0), { top: 0, height: 40 });
+    stubElementFromPoint(item(0));
+
+    document.dispatchEvent(pointerEvent("pointermove", { clientX: 0, clientY: 20 }));
+    flushRaf();
+
+    expect(Array.from(root.querySelectorAll(".item")).map((el) => el.getAttribute("data-id"))).toEqual(["1", "2"]);
+  });
+
+  it("ignore un article survolé qui n'est pas dans le conteneur survolé", () => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "item";
+    wrapper.innerHTML = '<ul class="item-list"><li class="inner">x</li></ul>';
+    root.appendChild(wrapper);
+    const inner = wrapper.querySelector(".inner")!;
+    const dragged = item(0);
+    handle(0).dispatchEvent(pointerEvent("pointerdown"));
+    stubElementFromPoint(inner);
+
+    document.dispatchEvent(pointerEvent("pointermove", { clientX: 0, clientY: 0 }));
+
+    expect(() => flushRaf()).not.toThrow();
+    expect(dragged.parentElement).toBe(root.querySelectorAll(".item-list")[0]);
   });
 });

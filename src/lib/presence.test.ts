@@ -42,4 +42,17 @@ describe("getDeviceName", () => {
     expect(localStorage.getItem("nldc:deviceName")).toBeNull();
     spy.mockRestore();
   });
+  it("tire chaque animal et chaque adjectif de la liste attendue", () => {
+    const animals = ["Renard", "Chat", "Hibou", "Panda", "Loutre", "Lynx", "Corbeau", "Lapin", "Écureuil", "Dauphin", "Faucon", "Blaireau"];
+    const adjectives = ["curieux", "discret", "malicieux", "rapide", "joyeux", "calme", "vif", "espiègle", "attentif", "gourmand", "rêveur", "futé"];
+    const seen: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      localStorage.clear();
+      const value = (i + 0.5) / 12;
+      const spy = vi.spyOn(Math, "random").mockReturnValue(value);
+      seen.push(getDeviceName());
+      spy.mockRestore();
+    }
+    expect(seen).toEqual(animals.map((animal, i) => `${animal} ${adjectives[i]}`));
+  });
 });

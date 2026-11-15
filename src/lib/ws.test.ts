@@ -272,4 +272,27 @@ describe("ListConnection", () => {
 
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
+
+  it("disconnect() avant toute connexion ne lève pas", () => {
+    expect(() => new ListConnection("ABCDEF", "Toi").disconnect()).not.toThrow();
+  });
+
+  it("send() avant connect() met en file sans lever", () => {
+    const conn = new ListConnection("ABCDEF", "Toi");
+    const msg: ClientMessage = { type: "deleteItem", id: "1" };
+    expect(() => conn.send(msg)).not.toThrow();
+    conn.connect();
+    latest().open();
+    expect(latest().sent).toEqual([JSON.stringify(msg)]);
+  });
+
+  it("send() pendant la connexion (pas encore ouverte) met en file au lieu d'envoyer", () => {
+    const conn = new ListConnection("ABCDEF", "Toi");
+    conn.connect();
+    const msg: ClientMessage = { type: "deleteItem", id: "1" };
+
+    conn.send(msg);
+
+    expect(latest().sent).toEqual([]);
+  });
 });

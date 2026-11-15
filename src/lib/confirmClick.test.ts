@@ -110,4 +110,60 @@ describe("wireConfirmClick", () => {
 
     expect(parentClick).not.toHaveBeenCalled();
   });
+
+  it("se désarme par défaut au bout de 3 s exactement", () => {
+    wireConfirmClick(button, { armedLabel: "Confirmer ?", onConfirm: vi.fn() });
+
+    button.click();
+    vi.advanceTimersByTime(2999);
+    expect(button.classList.contains("confirm-armed")).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(button.classList.contains("confirm-armed")).toBe(false);
+  });
+
+  it("la confirmation annule le minuteur : un réarmement garde son propre délai", () => {
+    wireConfirmClick(button, { armedLabel: "Confirmer ?", onConfirm: vi.fn(), timeoutMs: 3000 });
+
+    button.click();
+    vi.advanceTimersByTime(1000);
+    button.click(); // confirme
+    button.click(); // réarme à t = 1000
+    vi.advanceTimersByTime(2500); // t = 3500 : l'ancien minuteur serait déjà passé
+    expect(button.classList.contains("confirm-armed")).toBe(true);
+    vi.advanceTimersByTime(500);
+    expect(button.classList.contains("confirm-armed")).toBe(false);
+  });
+
+  it("restaure le texte armé après confirmation", () => {
+    const label = document.createElement("span");
+    label.textContent = "Vider";
+    button.appendChild(label);
+    wireConfirmClick(button, { armedText: "Confirmer ?", labelEl: label, onConfirm: vi.fn() });
+
+    button.click();
+    button.click();
+
+    expect(label.textContent).toBe("Vider");
+  });
+
+  it("sans armedText ni armedLabel, ne touche ni au texte ni aux enfants du bouton", () => {
+    const icon = document.createElement("i");
+    button.appendChild(icon);
+    wireConfirmClick(button, { onConfirm: vi.fn() });
+
+    button.click();
+    expect(button.firstElementChild).toBe(icon);
+    expect(button.getAttribute("aria-label")).toBe("Supprimer");
+    button.click();
+    expect(button.firstElementChild).toBe(icon);
+  });
+
+  it("avec armedText seul, garde l'aria-label d'origine", () => {
+    wireConfirmClick(button, { armedText: "Confirmer ?", onConfirm: vi.fn() });
+
+    button.click();
+
+    expect(button.getAttribute("aria-label")).toBe("Supprimer");
+    expect(button.textContent).toBe("Confirmer ?");
+  });
 });

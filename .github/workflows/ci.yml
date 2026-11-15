@@ -87,8 +87,26 @@ jobs:
       - run: npm ci
       - run: npm audit --audit-level=high
 
-  mutation-testing:
-    name: Mutation testing (logique pure)
+  mutation-testing-plan:
+    name: Mutation testing — plan
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # Un job par module, d'après les cibles de stryker.config.mjs.
+      - id: plan
+        run: node .github/scripts/mutation-matrix.mjs
+
+  mutation-testing-module:
+    name: Mutation testing — ${{ matrix.name }}
+    needs: mutation-testing-plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.mutation-testing-plan.outputs.matrix) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -97,13 +115,33 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run test:mutation
+      # Seuil bloquant à 100 % : un seul mutant survivant fait échouer le job.
+      - run: npx stryker run
+        env:
+          MUTATE: ${{ matrix.mutate }}
       - if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: mutation-report
+          name: mutation-report-${{ matrix.name }}
           path: mutation-report/
           retention-days: 14
+
+  # Un seul check stable « Mutation testing (logique pure) » pour la protection
+  # de branche, quel que soit le nombre de modules.
+  mutation-testing:
+    name: Mutation testing (logique pure)
+    needs: mutation-testing-module
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tous les modules à 100 %
+        env:
+          RESULT: ${{ needs.mutation-testing-module.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::Mutation testing : au moins un module sous 100 % ($RESULT)."
+            exit 1
+          fi
 
   build:
     name: Build de production

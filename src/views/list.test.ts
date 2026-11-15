@@ -341,11 +341,11 @@ describe("mountListView", () => {
       const { getDeviceName } = await import("../lib/presence");
       const me = getDeviceName();
 
-      conn.emitPresence([me, "Renard curieux"]);
+      conn.emitPresence([me, "Autre appareil"]);
 
       expect(root.querySelector("#presence-count")?.textContent).toBe("2");
       const names = Array.from(root.querySelectorAll("#presence-panel li")).map((li) => li.textContent);
-      expect(names).toEqual(["Toi", "Renard curieux"]);
+      expect(names).toEqual(["Toi", "Autre appareil"]);
     });
 
     it("une présence vide efface le panneau", async () => {

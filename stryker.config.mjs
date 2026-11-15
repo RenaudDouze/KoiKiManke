@@ -1,3 +1,27 @@
+// Chaque module est associé aux seuls fichiers de test capables de tuer ses
+// mutants : la CI lance un job par module (variable MUTATE, voir
+// .github/scripts/mutation-matrix.mjs) et le runner « command » ne relance que
+// ces tests-là pour chaque mutant, au lieu de toute la liste.
+export const targets = {
+  'shared/quantity.ts': ['shared/quantity.test.ts'],
+  'shared/historyKey.ts': ['shared/historyKey.test.ts'],
+  'shared/photo.ts': ['shared/photo.test.ts'],
+  'worker/index.ts': ['worker/index.test.ts'],
+  'worker/presence.ts': ['worker/presence.test.ts'],
+  'worker/crypto.ts': ['worker/crypto.test.ts'],
+  'worker/reducer.ts': ['worker/reducer.test.ts'],
+  'worker/photos.ts': ['worker/photos.test.ts'],
+  'src/lib/color.ts': ['src/lib/color.test.ts'],
+  'src/lib/sort.ts': ['src/lib/sort.test.ts'],
+  'src/lib/compactShare.ts': ['src/lib/compactShare.test.ts'],
+};
+
+const selected = process.env.MUTATE ? process.env.MUTATE.split(',') : Object.keys(targets);
+for (const file of selected) {
+  if (!targets[file]) throw new Error(`MUTATE : module inconnu ${file}`);
+}
+const tests = [...new Set(selected.flatMap((file) => targets[file]))];
+
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
   packageManager: "npm",
@@ -9,19 +33,7 @@ export default {
   // score. The "command" runner (a fixed `vitest run` invocation per
   // mutant) sidesteps that integration entirely and gives correct results.
   testRunner: "command",
-  commandRunner: {
-    // Relance uniquement les fichiers de test qui couvrent le périmètre
-    // muté ci-dessous (`mutate`), pas `npm test` en entier : le reste de la
-    // suite (tout src/, notamment les vues DOM comme list.test.ts, ~140
-    // tests) ne peut de toute façon pas tuer un mutant placé dans
-    // shared/ ou worker/reducer.ts, donc le relancer à chaque mutant ne
-    // fait que payer le coût jsdom (~10s) pour rien. Liste figée à la main
-    // (plutôt qu'un glob) pour qu'elle reste synchronisée avec `mutate` :
-    // ajouter un fichier à `mutate` sans l'ajouter ici ferait survivre tous
-    // ses mutants faute de test lancé contre eux.
-    command:
-      "npx vitest run shared/quantity.test.ts shared/historyKey.test.ts shared/photo.test.ts worker/index.test.ts worker/presence.test.ts worker/crypto.test.ts worker/reducer.test.ts worker/photos.test.ts src/lib/color.test.ts src/lib/sort.test.ts src/lib/compactShare.test.ts",
-  },
+  commandRunner: { command: `npx vitest run ${tests.join(' ')}` },
   coverageAnalysis: "off",
   // Stryker's tsconfig-rewriting preprocessor (needed to relax the sandbox's
   // tsconfig) calls a TypeScript API removed in TypeScript 7
@@ -45,17 +57,7 @@ export default {
   // fine) : un coût jugé disproportionné une fois observé, revenu en
   // arrière au profit de ce périmètre plus restreint mais rapide (~2s par
   // mutant plutôt que ~15-20s).
-  mutate: [
-    "shared/**/*.ts",
-    "worker/**/*.ts",
-    "src/lib/color.ts",
-    "src/lib/sort.ts",
-    "src/lib/compactShare.ts",
-    "!shared/types.ts",
-    "!worker/listRoom.ts",
-    "!worker/test/**",
-    "!**/*.test.ts",
-  ],
+  mutate: selected,
   ignorePatterns: ["dist", "coverage", "mutation-report", "playwright-report", "test-results", ".wrangler"],
   thresholds: {
     high: 100,

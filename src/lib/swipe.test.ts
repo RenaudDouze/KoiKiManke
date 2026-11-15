@@ -100,7 +100,8 @@ describe("enableSwipeToDelete", () => {
     document.dispatchEvent(pointerEvent("pointerup"));
 
     expect(content.style.transform).toBe("");
-    expect(content.style.transition).toBe("transform 0.2s ease");
+    // jsdom ≥ 31 normalise la valeur : « ease » (défaut CSS) est omis à la relecture.
+    expect(content.style.transition).toMatch(/^transform 0\.2s( ease)?$/);
 
     vi.advanceTimersByTime(200);
     expect(content.style.transition).toBe("");

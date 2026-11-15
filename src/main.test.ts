@@ -30,8 +30,14 @@ describe("main (bootstrap applicatif)", () => {
     document.body.innerHTML = '<div id="app"></div>';
     history.replaceState({}, "", "/");
     const app = document.getElementById("app");
+    // Thème et accessibilité sont appliqués dès le chargement du module.
+    localStorage.setItem("nldc:theme", "dark");
+    localStorage.setItem("nldc:a11y", JSON.stringify({ largeText: true, highContrast: false, reduceMotion: false }));
+    const firstPush = vi.spyOn(history, "pushState");
 
     await import("./main");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(document.documentElement.hasAttribute("data-large-text")).toBe(true);
     await vi.waitFor(() => expect(mountHomeView).toHaveBeenCalled());
 
     // Chargement initial sur "/" : vue accueil.
@@ -44,6 +50,8 @@ describe("main (bootstrap applicatif)", () => {
     capturedNavigate!("/l/abcdef");
     await vi.waitFor(() => expect(mountListView).toHaveBeenCalled());
     expect(location.pathname).toBe("/l/abcdef");
+    expect(firstPush).toHaveBeenCalledWith({}, "", "/l/abcdef");
+    firstPush.mockRestore();
     expect(mountListView).toHaveBeenCalledWith(app, "ABCDEF", expect.any(Function), null);
     expect(cleanupHome).toHaveBeenCalledOnce();
 
@@ -111,6 +119,18 @@ describe("main (bootstrap applicatif)", () => {
     window.dispatchEvent(new PopStateEvent("popstate"));
     await vi.waitFor(() => expect(mountListView).toHaveBeenCalledWith(app, "WITHIMPORT", expect.any(Function), encoded));
     expect(location.search).toBe("");
+    expect(replaceSpy).toHaveBeenCalledWith({}, "", `${location.origin}/l/withimport`);
+
+    // Seule une URL « /l/CODE » exacte monte la vue liste : ni préfixe ni suffixe.
+    mountListView.mockClear();
+    mountHomeView.mockClear();
+    history.replaceState({}, "", "/autre/l/abcdef");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await vi.waitFor(() => expect(mountHomeView).toHaveBeenCalledTimes(1));
+    history.replaceState({}, "", "/l/abcdef/suite");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await vi.waitFor(() => expect(mountHomeView).toHaveBeenCalledTimes(2));
+    expect(mountListView).not.toHaveBeenCalled();
 
     // Sans paramètre `import`, l'URL n'est pas touchée par un replaceState
     // superflu (voir consumeImportParam dans src/lib/compactShare.ts) — même
@@ -121,5 +141,15 @@ describe("main (bootstrap applicatif)", () => {
     window.dispatchEvent(new PopStateEvent("popstate"));
     await vi.waitFor(() => expect(mountHomeView).toHaveBeenCalledWith(app, expect.any(Function), null));
     expect(replaceSpy).not.toHaveBeenCalled();
+  });
+  it("monte directement la vue liste quand la page s'ouvre sur un lien de liste", async () => {
+    vi.resetModules();
+    mountListView.mockClear();
+    document.body.innerHTML = '<div id="app"></div>';
+    history.replaceState({}, "", "/l/direct1");
+
+    await import("./main");
+
+    await vi.waitFor(() => expect(mountListView).toHaveBeenCalledWith(document.getElementById("app"), "DIRECT1", expect.any(Function), null));
   });
 });

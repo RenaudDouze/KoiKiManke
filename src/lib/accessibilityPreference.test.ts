@@ -70,4 +70,28 @@ describe("accessibility", () => {
       spy.mockRestore();
     });
   });
+
+  describe("lecture réglage par réglage", () => {
+    it.each([
+      [{ largeText: true, highContrast: false, reduceMotion: false }],
+      [{ largeText: false, highContrast: true, reduceMotion: false }],
+      [{ largeText: false, highContrast: false, reduceMotion: true }],
+      [{ largeText: true, highContrast: true, reduceMotion: true }],
+    ])("relit exactement %j", (pref) => {
+      localStorage.setItem("nldc:a11y", JSON.stringify(pref));
+      expect(getAccessibilityPreference()).toStrictEqual(pref);
+    });
+
+    it("ignore une valeur non booléenne", () => {
+      localStorage.setItem("nldc:a11y", JSON.stringify({ largeText: "true", highContrast: 1, reduceMotion: null }));
+      expect(getAccessibilityPreference()).toStrictEqual({ largeText: false, highContrast: false, reduceMotion: false });
+    });
+
+    it("retombe sur tout désactivé si la valeur stockée est `null` ou vide", () => {
+      localStorage.setItem("nldc:a11y", "null");
+      expect(getAccessibilityPreference()).toStrictEqual({ largeText: false, highContrast: false, reduceMotion: false });
+      localStorage.setItem("nldc:a11y", "");
+      expect(getAccessibilityPreference()).toStrictEqual({ largeText: false, highContrast: false, reduceMotion: false });
+    });
+  });
 });

@@ -60,7 +60,7 @@ const PRIORITY_ICONS = [icons.priorityLow, icons.priorityNormal, icons.priorityH
 // n'est pas échappé à l'affichage ci-dessous (c'est un simple entier), donc
 // une valeur déjà persistée avant ce contrôle (ou tout autre bug futur) ne
 // doit jamais s'y retrouver telle quelle.
-const priorityOf = (item: Item): Priority => (item.priority === 0 || item.priority === 1 || item.priority === 2 ? item.priority : 1);
+const priorityOf = (item: Item): Priority => (item.priority === 0 || item.priority === 2 ? item.priority : 1);
 const cyclePriority = (p: Priority): Priority => (((p + 1) % 3) as Priority);
 
 function colorPaletteHtml(category: Category): string {
@@ -80,10 +80,12 @@ export function mountListView(
   importParam: string | null = null,
 ): () => void {
   let state: ListState | null = getCachedListState(code);
-  let connected = false;
-  let loading = state === null;
+  // Seul l'état « aucune liste disponible » (state nul) affiche l'écran de
+  // chargement ou d'erreur (voir render()) : les valeurs initiales de ces deux
+  // drapeaux n'ont d'effet que dans ce cas.
+  let loading = true;
   let notFound = false;
-  let loadError = false;
+  let loadError: boolean | undefined;
   let disposeItemDnd: (() => void) | null = null;
   let disposeCategoryDnd: (() => void) | null = null;
   let disposeSwipe: (() => void) | null = null;
@@ -138,7 +140,7 @@ export function mountListView(
 
   function clearUndoStack(): void {
     for (const entry of undoEntries) clearTimeout(entry.timer);
-    undoEntries = [];
+    undoEntries.length = 0;
     document.getElementById("undo-toast")?.remove();
   }
 
@@ -164,7 +166,6 @@ export function mountListView(
   function onStateUpdate(next: ListState) {
     const previous = state;
     state = next;
-    loading = false;
     notFound = false;
     cacheListState(next);
     touchRecentList(next.code, next.name);
@@ -190,10 +191,7 @@ export function mountListView(
 
   conn.onState(onStateUpdate);
   conn.onPresence((names) => renderPresence(names));
-  conn.onConnectionChange((isConnected) => {
-    connected = isConnected;
-    updateConnDot();
-  });
+  conn.onConnectionChange(updateConnDot);
   conn.onError((message) => showToast(message));
 
   // Lien/QR compact (voir src/lib/compactShare.ts, src/main.ts) : réutilise
@@ -213,7 +211,6 @@ export function mountListView(
       if (!fetched) {
         if (!state) {
           notFound = true;
-          loading = false;
           render();
           return;
         }
@@ -223,7 +220,8 @@ export function mountListView(
         touchRecentList(fetched.code, fetched.name);
       }
     } catch {
-      loadError = state === null;
+      // Sans effet si une liste en cache est déjà affichée (voir render()).
+      loadError = true;
     }
     loading = false;
     render();
@@ -235,7 +233,7 @@ export function mountListView(
   function render(): void {
     if (notFound) {
       root.innerHTML = notFoundHtml(code);
-      root.querySelector("#btn-home")?.addEventListener("click", () => navigate("/"));
+      root.querySelector("#btn-home")!.addEventListener("click", () => navigate("/"));
       return;
     }
     if (loading && !state) {
@@ -244,7 +242,7 @@ export function mountListView(
     }
     if (loadError && !state) {
       root.innerHTML = `<div class="centered-message"><p>Impossible de charger la liste. Vérifie ta connexion.</p><button class="btn" id="retry">Réessayer</button></div>`;
-      root.querySelector("#retry")?.addEventListener("click", () => location.reload());
+      root.querySelector("#retry")!.addEventListener("click", () => location.reload());
       return;
     }
     // Les trois branches ci-dessus couvrent exhaustivement tous les cas où
@@ -308,7 +306,7 @@ export function mountListView(
     // #list-title et state garantis présents à ce stade.
     const titleEl = root.querySelector("#list-title") as HTMLElement;
     if (titleEl.querySelector("input")) return; // user is mid-edit, don't clobber
-    if (titleEl.textContent !== state!.name) titleEl.textContent = state!.name;
+    titleEl.textContent = state!.name;
   }
 
   function updateCategorySelect(): void {
@@ -318,7 +316,7 @@ export function mountListView(
     if ([...select.options].some((o) => o.value === previous)) select.value = previous;
   }
 
-  function updateConnDot(): void {
+  function updateConnDot(connected: boolean): void {
     const dot = root.querySelector("#conn-dot");
     if (!dot) return;
     dot.classList.toggle("online", connected);
@@ -364,9 +362,10 @@ export function mountListView(
 
     const searchBar = root.querySelector("#search-bar") as HTMLElement;
     const searchInput = root.querySelector("#search-input") as HTMLInputElement;
-    let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+    let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+    // Un minuteur de saisie encore en attente à la fermeture n'est pas
+    // annulé : il relirait alors la valeur du champ, déjà vidée ci-dessous.
     const closeSearch = () => {
-      if (searchDebounce) clearTimeout(searchDebounce);
       searchBar.hidden = true;
       searchQuery = "";
       searchInput.value = "";
@@ -383,7 +382,7 @@ export function mountListView(
       // la liste (renderCategories() n'est pas incrémental) : sur une liste
       // chargée, filtrer à chaque caractère tapé referait tout le travail à
       // chaque frappe pour rien.
-      if (searchDebounce) clearTimeout(searchDebounce);
+      clearTimeout(searchDebounce);
       searchDebounce = setTimeout(() => {
         searchQuery = searchInput.value;
         renderCategories();
@@ -398,7 +397,10 @@ export function mountListView(
         value: state!.name,
         onCommit: (value) => {
           if (value) conn.send({ type: "renameList", name: value });
-          else render();
+          // Nom vide : on garde l'ancien et on retire le champ de saisie
+          // (render() ne le ferait pas : updateTitle() ignore un titre en
+          // cours d'édition).
+          else titleEl.textContent = state!.name;
         },
       });
     });
@@ -493,24 +495,22 @@ export function mountListView(
     const close = () => {
       overlay.remove();
       releaseFocusTrap();
+      document.removeEventListener("keydown", onKeydown);
     };
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) close();
     });
-    document.addEventListener("keydown", onImportKeydown);
-    function onImportKeydown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        document.removeEventListener("keydown", onImportKeydown);
-        close();
-      }
-    }
-    overlay.querySelector(".modal-close")?.addEventListener("click", close);
-    overlay.querySelector("#import-cancel")?.addEventListener("click", close);
-    overlay.querySelector("#import-merge")?.addEventListener("click", () => {
+    document.addEventListener("keydown", onKeydown);
+    overlay.querySelector(".modal-close")!.addEventListener("click", close);
+    overlay.querySelector("#import-cancel")!.addEventListener("click", close);
+    overlay.querySelector("#import-merge")!.addEventListener("click", () => {
       conn.send({ type: "importState", mode: "merge", data });
       close();
     });
-    overlay.querySelector("#import-replace")?.addEventListener("click", () => {
+    overlay.querySelector("#import-replace")!.addEventListener("click", () => {
       if (confirm("Remplacer entièrement la liste actuelle par le contenu du fichier ?")) {
         conn.send({ type: "importState", mode: "replace", data });
         close();
@@ -534,7 +534,7 @@ export function mountListView(
     input.type = "file";
     input.accept = "image/*";
     input.addEventListener("change", () => {
-      const file = input.files?.[0];
+      const file = input.files![0];
       input.remove();
       if (file) void handlePhotoFile(itemId, file);
     });
@@ -703,14 +703,13 @@ export function mountListView(
         handleSelector: ".category-manage-drag-handle",
         onDrop: () => {
           const orderedIds = Array.from(overlay.querySelectorAll<HTMLElement>(".manage-category-list li"))
-            .map((li) => li.dataset.id!)
-            .filter((id) => id);
+            .map((li) => li.dataset.id!);
           conn.send({ type: "reorderCategories", orderedIds });
         },
       });
     };
     const close = () => {
-      disposeDnd?.();
+      disposeDnd!();
       overlay.remove();
       unsubscribe();
       releaseFocusTrap();
@@ -769,15 +768,13 @@ export function mountListView(
               // would otherwise still target the old, since-vanished key and
               // be silently dropped by the server.
               const newKey = historyKey(value);
-              if (newKey !== oldKey) {
-                // .suggestion-name est toujours à l'intérieur du <li
-                // data-key> de sa propre ligne.
-                el.closest("li")!
-                  .querySelectorAll<HTMLElement>("[data-key]")
-                  .forEach((node) => {
-                    node.dataset.key = newKey;
-                  });
-              }
+              // .suggestion-name est toujours à l'intérieur du <li data-key>
+              // de sa propre ligne. Sans effet si la clé ne change pas.
+              el.closest("li")!
+                .querySelectorAll<HTMLElement>("[data-key]")
+                .forEach((node) => {
+                  node.dataset.key = newKey;
+                });
             },
           });
         });
@@ -993,6 +990,14 @@ export function mountListView(
     conn.send({ type: "addItem", id, rawText: entry.label, categoryId: entry.categoryId });
   }
 
+  // Les trois sont nuls tant qu'aucun rendu complet de la liste n'a eu lieu
+  // (liste vide, tout masqué…) : d'où les `?.`.
+  function disposeInteractions(): void {
+    disposeItemDnd?.();
+    disposeCategoryDnd?.();
+    disposeSwipe?.();
+  }
+
   function renderCategories(): void {
     // #categories fait partie du gabarit statique, state garanti non-nul
     // (voir render()).
@@ -1011,19 +1016,20 @@ export function mountListView(
       );
 
     const cats = [...state!.categories].sort((a, b) => a.order - b.order);
-    type Group = { id: string | null; name: string; items: Item[]; showHeader: boolean; hue: number };
+    // name nul : pas d'en-tête (liste sans aucune catégorie).
+    type Group = { id: string | null; name: string | null; items: Item[]; hue: number };
     let groups: Group[] = cats.map((c) => ({
       id: c.id,
       name: c.name,
       items: sortItems(byCategory(c.id)),
-      showHeader: true,
       hue: resolveCategoryHue(c),
     }));
     const uncategorized = sortItems(byCategory(null));
     if (cats.length === 0) {
-      groups.unshift({ id: null, name: "Articles", items: uncategorized, showHeader: false, hue: 0 });
-    } else if (uncategorized.length > 0) {
-      groups.push({ id: null, name: "Sans catégorie", items: uncategorized, showHeader: true, hue: 0 });
+      groups.unshift({ id: null, name: null, items: uncategorized, hue: 0 });
+    } else {
+      // Retirée ci-dessous si elle est vide, comme toute autre catégorie.
+      groups.push({ id: null, name: "Sans catégorie", items: uncategorized, hue: 0 });
     }
 
     // Une catégorie sans article (dans cette liste, ou ne correspondant pas
@@ -1040,25 +1046,19 @@ export function mountListView(
 
     if (groups.length === 0 && query) {
       container.innerHTML = `<div class="empty-state">Aucun article ne correspond à « ${escapeHtml(searchQuery.trim())} ».</div>`;
-      disposeItemDnd?.();
-      disposeCategoryDnd?.();
-      disposeSwipe?.();
+      disposeInteractions();
       return;
     }
 
     if (groups.length === 0 && hideChecked && state!.items.length > 0) {
       container.innerHTML = `<div class="empty-state">Tous les articles sont cochés (et masqués).</div>`;
-      disposeItemDnd?.();
-      disposeCategoryDnd?.();
-      disposeSwipe?.();
+      disposeInteractions();
       return;
     }
 
-    if (groups.every((g) => g.items.length === 0)) {
+    if (groups.length === 0) {
       container.innerHTML = `<div class="empty-state">Ta liste est vide. Ajoute un premier article ci-dessus 👆</div>`;
-      disposeItemDnd?.();
-      disposeCategoryDnd?.();
-      disposeSwipe?.();
+      disposeInteractions();
       return;
     }
 
@@ -1071,7 +1071,7 @@ export function mountListView(
         return `
       <section class="category-section${g.id ? " has-color" : ""}" data-category-id="${id}" ${g.id ? `style="--cat-hue: ${g.hue}"` : ""}>
         ${
-          g.showHeader
+          g.name !== null
             ? `<header class="category-header">
                 ${g.id ? `<button class="drag-handle category-drag-handle" aria-label="Réordonner la catégorie">${icons.gripVertical}</button>` : `<span class="drag-handle-spacer"></span>`}
                 ${g.id ? `<span class="category-dot" aria-hidden="true"></span>` : ""}
@@ -1178,9 +1178,7 @@ export function mountListView(
       });
     });
 
-    disposeItemDnd?.();
-    disposeCategoryDnd?.();
-    disposeSwipe?.();
+    disposeInteractions();
 
     // Le glisser-déposer reste actif même en tri alphabétique : il permet
     // toujours de déplacer un article vers une autre catégorie. Seul le
@@ -1399,9 +1397,7 @@ export function mountListView(
 
   return () => {
     conn.disconnect();
-    disposeItemDnd?.();
-    disposeCategoryDnd?.();
-    disposeSwipe?.();
+    disposeInteractions();
     disposeKeyboardInset();
     clearUndoStack();
     document.querySelectorAll(".modal-overlay").forEach((el) => el.remove());

@@ -188,4 +188,96 @@ describe("enableSwipeToDelete", () => {
     document.dispatchEvent(pointerEvent("pointermove", { clientX: -35, clientY: 50 }));
     expect(content.style.transform).toBe("translateX(-35px)");
   });
+
+  describe("détails du geste", () => {
+    const down = (x: number, y: number) => content.dispatchEvent(pointerEvent("pointerdown", { clientX: x, clientY: y }));
+    const move = (x: number, y: number) => document.dispatchEvent(pointerEvent("pointermove", { clientX: x, clientY: y }));
+
+    it("mesure le déplacement depuis le point d'appui, en X comme en Y", () => {
+      down(100, 100);
+      move(40, 100);
+      expect(content.style.transform).toBe("translateX(-60px)");
+    });
+
+    it("un déplacement horizontal d'exactement 10px engage déjà le geste", () => {
+      down(0, 0);
+      move(-10, 0);
+      expect(content.style.transform).toBe("translateX(-10px)");
+    });
+
+    it("un déplacement vertical d'exactement 10px sort du geste", () => {
+      down(0, 0);
+      move(0, 10);
+      move(-50, 0);
+      expect(content.style.transform).toBe("");
+    });
+
+    it("à déplacements X et Y égaux, le geste reste horizontal", () => {
+      down(0, 0);
+      move(-15, 15);
+      expect(content.style.transform).toBe("translateX(-15px)");
+    });
+
+    it("bloque le défilement natif une fois le geste engagé", () => {
+      down(0, 0);
+      const event = pointerEvent("pointermove", { clientX: -30, clientY: 0 });
+      document.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it("écoute pointermove en mode non passif", () => {
+      const add = vi.spyOn(document, "addEventListener");
+      down(0, 0);
+      expect(add.mock.calls.find(([type]) => type === "pointermove")?.[2]).toStrictEqual({ passive: false });
+      add.mockRestore();
+    });
+
+    it("ne démarre rien si la ligne n'a pas d'élément à faire glisser", () => {
+      const bare = document.createElement("li");
+      bare.className = "item";
+      root.appendChild(bare);
+      const add = vi.spyOn(document, "addEventListener");
+      bare.dispatchEvent(pointerEvent("pointerdown", { clientX: 0, clientY: 0 }));
+      expect(add).not.toHaveBeenCalled();
+      add.mockRestore();
+    });
+
+    it("retire ses trois écouteurs à la fin du geste", () => {
+      const remove = vi.spyOn(document, "removeEventListener");
+      down(0, 0);
+      document.dispatchEvent(pointerEvent("pointerup"));
+      const types = remove.mock.calls.map(([type]) => type);
+      expect(types).toEqual(expect.arrayContaining(["pointermove", "pointerup", "pointercancel"]));
+      remove.mockRestore();
+    });
+
+    it("un pointercancel termine le geste comme un relâchement", () => {
+      down(0, 0);
+      move(-30, 0);
+      document.dispatchEvent(pointerEvent("pointercancel"));
+      expect(content.style.transition).toBe("transform 0.2s");
+      expect(content.style.transform).toBe("");
+    });
+
+    it("supprime à partir du seuil exact, avec l'animation de sortie", () => {
+      down(0, 0);
+      move(-72, 0);
+      document.dispatchEvent(pointerEvent("pointerup"));
+      expect(content.style.transition).toBe("transform 0.18s, opacity 0.18s");
+      vi.advanceTimersByTime(180);
+      expect(onDelete).toHaveBeenCalledOnce();
+    });
+
+    it("un geste annulé ne laisse pas de mouvement résiduel pour le suivant", () => {
+      down(0, 0);
+      move(-80, 0);
+      document.dispatchEvent(pointerEvent("pointerup"));
+      vi.advanceTimersByTime(180);
+      onDelete.mockClear();
+      down(0, 0);
+      document.dispatchEvent(pointerEvent("pointerup"));
+      vi.advanceTimersByTime(500);
+      expect(onDelete).not.toHaveBeenCalled();
+    });
+  });
 });

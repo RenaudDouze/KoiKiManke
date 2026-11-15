@@ -78,4 +78,41 @@ describe("startEdit", () => {
     el.querySelector("input")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(parentClick).not.toHaveBeenCalled();
   });
+
+  it("crée un champ de type texte, sans placeholder si non fourni", () => {
+    startEdit(el, { value: "Pommes", onCommit: vi.fn() });
+    const input = el.querySelector("input")!;
+    expect(input.getAttribute("type")).toBe("text");
+    expect(input.placeholder).toBe("");
+  });
+
+  it("sélectionne tout le texte à l'ouverture", () => {
+    startEdit(el, { value: "Pommes", onCommit: vi.fn() });
+    const input = el.querySelector("input")!;
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(6);
+  });
+
+  it("Entrée et Échap bloquent l'action par défaut du navigateur", () => {
+    startEdit(el, { value: "Pommes", onCommit: vi.fn() });
+    const input = el.querySelector("input")!;
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    input.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+
+    el.replaceChildren();
+    startEdit(el, { value: "Pommes", onCommit: vi.fn() });
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    el.querySelector("input")!.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(true);
+  });
+
+  it("deux blur successifs ne valident qu'une fois", () => {
+    const onCommit = vi.fn();
+    startEdit(el, { value: "Pommes", onCommit });
+    const input = el.querySelector("input")!;
+    input.dispatchEvent(new Event("blur"));
+    input.dispatchEvent(new Event("blur"));
+    expect(onCommit).toHaveBeenCalledOnce();
+  });
 });

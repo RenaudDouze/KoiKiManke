@@ -81,13 +81,13 @@ export function openShareModal(code: string, listName: string, exportPayload: Im
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close();
   });
-  overlay.querySelector(".modal-close")?.addEventListener("click", close);
+  overlay.querySelector(".modal-close")!.addEventListener("click", close);
 
-  overlay.querySelector("#copy-link")?.addEventListener("click", async () => {
+  overlay.querySelector("#copy-link")!.addEventListener("click", async () => {
     await copyText(url);
     flash(overlay, "#copy-link", "Copié !");
   });
-  overlay.querySelector("#copy-code")?.addEventListener("click", async () => {
+  overlay.querySelector("#copy-code")!.addEventListener("click", async () => {
     await copyText(code);
     flash(overlay, "#copy-code", "Copié !");
   });
@@ -99,14 +99,14 @@ export function openShareModal(code: string, listName: string, exportPayload: Im
     }
   });
 
-  overlay.querySelector("#share-export")?.addEventListener("click", () => {
+  overlay.querySelector("#share-export")!.addEventListener("click", () => {
     close();
     actions.onExport();
   });
   const importFileInput = overlay.querySelector("#share-import-file") as HTMLInputElement;
-  overlay.querySelector("#share-import")?.addEventListener("click", () => importFileInput.click());
+  overlay.querySelector("#share-import")!.addEventListener("click", () => importFileInput.click());
   importFileInput.addEventListener("change", () => {
-    const file = importFileInput.files?.[0];
+    const file = importFileInput.files![0];
     importFileInput.value = "";
     if (!file) return;
     close();
@@ -131,7 +131,7 @@ export function openShareModal(code: string, listName: string, exportPayload: Im
     (overlay.querySelector("#compact-link") as HTMLElement).textContent = compactUrl;
     renderQrInto("#compact-qr-wrap", compactUrl);
   });
-  overlay.querySelector("#copy-compact-link")?.addEventListener("click", async () => {
+  overlay.querySelector("#copy-compact-link")!.addEventListener("click", async () => {
     if (!compactUrl) return;
     await copyText(compactUrl);
     flash(overlay, "#copy-compact-link", "Copié !");

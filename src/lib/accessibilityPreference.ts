@@ -15,13 +15,13 @@ const DEFAULT_PREFERENCE: AccessibilityPreference = { largeText: false, highCont
 // ou si localStorage est indisponible.
 export function getAccessibilityPreference(): AccessibilityPreference {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT_PREFERENCE };
-    const parsed = JSON.parse(raw);
+    // Rien de stocké (`null`) : JSON.parse(null) vaut `null`, dont la lecture
+    // d'une propriété lève — le `catch` ci-dessous donne alors les défauts.
+    const parsed = JSON.parse(localStorage.getItem(KEY) as string);
     return {
-      largeText: parsed?.largeText === true,
-      highContrast: parsed?.highContrast === true,
-      reduceMotion: parsed?.reduceMotion === true,
+      largeText: parsed.largeText === true,
+      highContrast: parsed.highContrast === true,
+      reduceMotion: parsed.reduceMotion === true,
     };
   } catch {
     return { ...DEFAULT_PREFERENCE };

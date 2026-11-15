@@ -13,12 +13,14 @@ function isSupported(): boolean {
   return typeof window !== "undefined" && "Notification" in window;
 }
 
-function getStoredPreference(): "on" | "off" {
+function isStoredOn(): boolean {
+  let on = false;
   try {
-    return localStorage.getItem(STORAGE_KEY) === "on" ? "on" : "off";
+    on = localStorage.getItem(STORAGE_KEY) === "on";
   } catch {
-    return "off";
+    // localStorage illisible : la préférence reste désactivée.
   }
+  return on;
 }
 
 function setStoredPreference(pref: "on" | "off"): void {
@@ -33,7 +35,7 @@ function setStoredPreference(pref: "on" | "off"): void {
 export function getNotificationStatus(): NotificationStatus {
   if (!isSupported()) return "unsupported";
   if (Notification.permission === "denied") return "denied";
-  if (Notification.permission === "granted" && getStoredPreference() === "on") return "on";
+  if (Notification.permission === "granted" && isStoredOn()) return "on";
   return "off";
 }
 

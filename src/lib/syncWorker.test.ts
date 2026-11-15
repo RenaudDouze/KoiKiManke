@@ -30,6 +30,15 @@ describe("syncWorker", () => {
     });
   });
 
+  describe("variable absente (jamais définie)", () => {
+    it("apiUrl et wsUrl restent relatifs", async () => {
+      vi.stubEnv("VITE_SYNC_WORKER_URL", undefined);
+      const { apiUrl, wsUrl } = await import("./syncWorker");
+      expect(apiUrl("/api/lists")).toBe("/api/lists");
+      expect(wsUrl("/ws")).toBe(`ws://${location.host}/ws`);
+    });
+  });
+
   describe("avec VITE_SYNC_WORKER_URL (déploiement GitHub Pages)", () => {
     beforeEach(() => {
       vi.stubEnv("VITE_SYNC_WORKER_URL", "https://koikimanke.example.workers.dev/");

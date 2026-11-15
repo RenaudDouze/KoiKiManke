@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountListView } from "./list";
-import { cacheListState } from "../lib/storage";
+import { cacheListState, getCachedListState, getRecentLists } from "../lib/storage";
 import { encodeListToParam } from "../lib/compactShare";
 import type { Category, ClientMessage, HistoryEntry, Item, ListState } from "../../shared/types";
 
@@ -135,7 +135,7 @@ vi.mock("../lib/confirmClick", () => ({ wireConfirmClick: (...a: Parameters<type
 
 interface StartEditCall {
   el: HTMLElement;
-  opts: { value: string; onCommit: (value: string) => void };
+  opts: { value: string; placeholder?: string; onCommit: (value: string) => void };
 }
 const startEditCalls: StartEditCall[] = [];
 const startEdit = vi.fn((el: HTMLElement, opts: StartEditCall["opts"]) => {
@@ -1980,6 +1980,1198 @@ describe("mountListView", () => {
       expect(document.querySelector(".modal-overlay")).toBeNull();
       expect(document.querySelector(".undo-toast")).toBeNull();
       for (const call of viewDndCalls) expect(call.dispose).toHaveBeenCalled();
+    });
+  });
+  describe("détails de comportement (mutation) — 1", () => {
+    const names = () => Array.from(root.querySelectorAll(".item-name")).map((el) => el.textContent);
+    const strayIn = (selector: string) =>
+      Array.from(root.ownerDocument.querySelectorAll(selector)).flatMap((el) =>
+        Array.from(el.childNodes)
+          .filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== "")
+          .map((n) => n.textContent),
+      );
+
+    it("le menu affiche l'icône et le libellé du thème, et les met à jour au clic", async () => {
+      const labels: string[] = [];
+      for (const theme of ["system", "light", "dark"]) {
+        localStorage.setItem("nldc:theme", theme);
+        cleanup?.();
+        await mount();
+        const btn = root.querySelector('[data-action="theme"]') as HTMLElement;
+        expect(btn.querySelector("svg")).not.toBeNull();
+        labels.push(btn.innerHTML.replace(/\s+/g, " "));
+      }
+      expect(new Set(labels).size).toBe(3);
+
+      localStorage.setItem("nldc:theme", "system");
+      cleanup?.();
+      await mount();
+      const btn = root.querySelector('[data-action="theme"]') as HTMLElement;
+      expect(btn.textContent).toContain("Thème : Auto");
+      btn.click();
+      expect(btn.textContent).toContain("Thème : Clair");
+    });
+
+    it("le menu de tri et celui des notifications se mettent à jour au clic", async () => {
+      await mount();
+      const sort = root.querySelector('[data-action="item-sort"]') as HTMLElement;
+      expect(sort.textContent).toContain("Tri des articles : Manuel");
+      sort.click();
+      expect(sort.textContent).toContain("Tri des articles : Alphabétique");
+
+      toggleNotifications.mockResolvedValue("on");
+      notificationStatusLabel.mockImplementation((status: string) => (status === "on" ? "Activées" : "Désactivées"));
+      getNotificationStatus.mockReturnValue("on" as never);
+      const notif = root.querySelector('[data-action="notifications"]') as HTMLElement;
+      notif.click();
+      await vi.waitFor(() => expect(notif.textContent).toContain("Notifications : Activées"));
+    });
+
+    it("la palette de couleurs propose les douze teintes nommées et marque la couleur courante", async () => {
+      await mount(sampleState({ categories: [makeCategory({ id: "c1", color: 120 })] }));
+      root.querySelector('[data-action="manage-categories"]')?.dispatchEvent(new Event("click"));
+      (document.querySelector(".color-swatch-toggle") as HTMLButtonElement).click();
+
+      const swatches = Array.from(document.querySelectorAll(".color-palette .color-swatch:not(.color-swatch-auto)"));
+      expect(swatches.map((b) => [b.getAttribute("data-color"), b.getAttribute("aria-label")])).toEqual([
+        ["0", "Rouge"], ["30", "Orange"], ["60", "Jaune"], ["90", "Citron vert"], ["120", "Vert"], ["150", "Émeraude"],
+        ["180", "Turquoise"], ["210", "Bleu ciel"], ["240", "Bleu"], ["270", "Indigo"], ["300", "Violet"], ["330", "Rose"],
+      ]);
+      expect(swatches.filter((b) => b.classList.contains("selected")).map((b) => b.getAttribute("data-color"))).toEqual(["120"]);
+      expect(swatches.filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.getAttribute("data-color"))).toEqual(["120"]);
+      const auto = document.querySelector(".color-swatch-auto")!;
+      expect(auto.classList.contains("selected")).toBe(false);
+      expect(auto.getAttribute("aria-pressed")).toBe("false");
+      expect(auto.getAttribute("aria-label")).toBe("Couleur automatique");
+      expect(strayIn(".color-palette")).toEqual([]);
+    });
+
+    it("sans couleur manuelle, « Auto » est la seule pastille marquée", async () => {
+      await mount(sampleState({ categories: [makeCategory({ id: "c1" })] }));
+      root.querySelector('[data-action="manage-categories"]')?.dispatchEvent(new Event("click"));
+      (document.querySelector(".color-swatch-toggle") as HTMLButtonElement).click();
+
+      const auto = document.querySelector(".color-swatch-auto")!;
+      expect(auto.classList.contains("selected")).toBe(true);
+      expect(auto.getAttribute("aria-pressed")).toBe("true");
+      expect(document.querySelectorAll(".color-swatch.selected")).toHaveLength(1);
+      expect(document.querySelectorAll('.color-swatch[aria-pressed="true"]')).toHaveLength(1);
+    });
+
+    it("n'accepte que les priorités 0, 1 et 2 (repli sur Normale sinon)", async () => {
+      const items = [
+        makeItem({ id: "p0", priority: 0 }),
+        makeItem({ id: "p1", priority: 1 }),
+        makeItem({ id: "p2", priority: 2 }),
+        makeItem({ id: "p7", priority: 7 as never }),
+        makeItem({ id: "pn" }),
+      ];
+      await mount(sampleState({ items }));
+      const prio = (id: string) => root.querySelector(`.item[data-id="${id}"]`)!.getAttribute("data-priority");
+      expect([prio("p0"), prio("p1"), prio("p2"), prio("p7"), prio("pn")]).toEqual(["0", "1", "2", "1", "1"]);
+    });
+
+    it("la pastille d'annulation est annoncée comme statut", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+      findConfirm(root.querySelector('[data-action="delete-item"]') as HTMLElement).opts.onConfirm();
+      expect(document.querySelector(".undo-toast")!.getAttribute("role")).toBe("status");
+    });
+
+    it("l'expiration d'une annulation garde les plus récentes affichées", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "i1" }), makeItem({ id: "i2" })] }));
+      const buttons = root.querySelectorAll('[data-action="delete-item"]');
+      findConfirm(buttons[0] as HTMLElement).opts.onConfirm();
+      vi.advanceTimersByTime(2000);
+      findConfirm(buttons[1] as HTMLElement).opts.onConfirm();
+
+      vi.advanceTimersByTime(3000); // la première expire, la seconde reste
+      expect(document.querySelector(".undo-toast button")?.textContent).toBe("Annuler");
+      vi.advanceTimersByTime(2000);
+      expect(document.querySelector(".undo-toast")).toBeNull();
+    });
+
+    it("l'expiration tolère un toast déjà retiré du document", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+      findConfirm(root.querySelector('[data-action="delete-item"]') as HTMLElement).opts.onConfirm();
+      document.querySelector(".undo-toast")!.remove();
+      expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
+    });
+
+    it("les minuteurs d'annulation d'une vue quittée n'effacent pas le toast de la suivante", async () => {
+      for (const undoBeforeLeaving of [false, true]) {
+        await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+        findConfirm(root.querySelector('[data-action="delete-item"]') as HTMLElement).opts.onConfirm();
+        if (undoBeforeLeaving) (document.querySelector(".undo-toast button") as HTMLButtonElement).click();
+        vi.advanceTimersByTime(3000);
+        cleanup();
+
+        await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+        findConfirm(root.querySelector('[data-action="delete-item"]') as HTMLElement).opts.onConfirm();
+        vi.advanceTimersByTime(2500); // le minuteur de la vue précédente aurait sonné
+        expect(document.querySelector(".undo-toast")).not.toBeNull();
+        cleanup();
+      }
+    });
+
+    it("mémorise l'état reçu en direct (cache + listes récentes)", async () => {
+      const conn = await mount();
+      conn.emitState(sampleState({ name: "Diffusée" }));
+      expect(getCachedListState("ABCDEF")?.name).toBe("Diffusée");
+      expect(getRecentLists().find((r) => r.code === "ABCDEF")?.name).toBe("Diffusée");
+    });
+
+    it("mémorise la liste récupérée au chargement (cache + listes récentes)", async () => {
+      await mount(sampleState({ name: "Récupérée" }));
+      expect(getCachedListState("ABCDEF")?.name).toBe("Récupérée");
+      expect(getRecentLists().find((r) => r.code === "ABCDEF")?.name).toBe("Récupérée");
+    });
+
+    it("compteur d'articles : cochés/total, vide pour une liste vide", async () => {
+      const conn = await mount(sampleState({ items: [makeItem({ id: "a" }), makeItem({ id: "b", checked: true }), makeItem({ id: "c" })] }));
+      const counter = root.querySelector("#item-counter")!;
+      expect(counter.textContent).toBe("1/3");
+      conn.emitState(sampleState({ items: [] }));
+      expect(counter.textContent).toBe("");
+      conn.emitState(sampleState({ items: [makeItem({ id: "a", checked: true })] }));
+      expect(counter.textContent).toBe("1/1");
+    });
+
+    it("ne célèbre ni une liste vidée ni une liste seulement partiellement cochée", async () => {
+      const conn = await mount(sampleState({ items: [makeItem({ id: "a" }), makeItem({ id: "b" })] }));
+      conn.emitState(sampleState({ items: [makeItem({ id: "a", checked: true }), makeItem({ id: "b" })] }));
+      expect(document.querySelector(".celebration-toast")).toBeNull();
+      conn.emitState(sampleState({ items: [] }));
+      expect(document.querySelector(".celebration-toast")).toBeNull();
+    });
+
+    it("la célébration est annoncée, affiche son message puis devient visible", async () => {
+      const conn = await mount(sampleState({ items: [makeItem({ id: "a" })] }));
+      conn.emitState(sampleState({ items: [makeItem({ id: "a", checked: true })] }));
+      const toast = document.querySelector(".celebration-toast")!;
+      expect(toast.getAttribute("role")).toBe("status");
+      expect(toast.textContent).toBe("🎉 Tout est dans le chariot !");
+      vi.advanceTimersByTime(50);
+      expect(toast.classList.contains("visible")).toBe(true);
+    });
+
+    it("garde la catégorie choisie dans le formulaire si elle existe toujours, sinon retombe sur « Sans catégorie »", async () => {
+      const conn = await mount(sampleState({ categories: [makeCategory({ id: "c1", name: "Fruits" }), makeCategory({ id: "c2", name: "Légumes" })] }));
+      const select = root.querySelector("#add-category") as HTMLSelectElement;
+      select.value = "c2";
+
+      conn.emitState(sampleState({ categories: [makeCategory({ id: "c1", name: "Fruits" }), makeCategory({ id: "c2", name: "Légumes" })] }));
+      expect(select.value).toBe("c2");
+
+      conn.emitState(sampleState({ categories: [makeCategory({ id: "c1", name: "Fruits" })] }));
+      expect(select.selectedIndex).toBe(0);
+      expect(select.value).toBe("");
+    });
+
+    it("la liste des présents n'insère aucun texte parasite", async () => {
+      const conn = await mount();
+      conn.emitPresence(["Renard curieux", "Chat vif", "Hibou calme"]);
+      expect(root.querySelectorAll(".presence-list li")).toHaveLength(3);
+      expect(strayIn(".presence-list")).toEqual([]);
+    });
+
+    it("renommer avec un nom vide garde l'ancien titre et retire le champ", async () => {
+      await mount(sampleState({ name: "Courses" }));
+      const title = root.querySelector("#list-title") as HTMLElement;
+      title.click();
+      const edit = findStartEdit(title);
+      title.replaceChildren(document.createElement("input"));
+
+      edit.opts.onCommit("");
+
+      expect(title.querySelector("input")).toBeNull();
+      expect(title.textContent).toBe("Courses");
+    });
+
+    describe("recherche", () => {
+      const open = async (items: Item[]) => {
+        await mount(sampleState({ items }));
+        (root.querySelector("#btn-search") as HTMLButtonElement).click();
+        return root.querySelector("#search-input") as HTMLInputElement;
+      };
+      const type = (input: HTMLInputElement, value: string) => {
+        input.value = value;
+        input.dispatchEvent(new Event("input"));
+      };
+
+      it("ouvrir la recherche focalise le champ, la rouvrir (second clic) la ferme et réinitialise le filtre", async () => {
+        const input = await open([makeItem({ id: "a", name: "Pommes" }), makeItem({ id: "b", name: "Bananes" })]);
+        expect(document.activeElement).toBe(input);
+
+        type(input, "ban");
+        vi.advanceTimersByTime(150);
+        expect(names()).toEqual(["Bananes"]);
+
+        (root.querySelector("#btn-search") as HTMLButtonElement).click();
+        expect((root.querySelector("#search-bar") as HTMLElement).hidden).toBe(true);
+        expect(input.value).toBe("");
+        expect(names().sort()).toEqual(["Bananes", "Pommes"]);
+      });
+
+      it("le bouton de fermeture vide le champ", async () => {
+        const input = await open([makeItem({ id: "a", name: "Pommes" })]);
+        type(input, "xyz");
+        (root.querySelector("#search-close") as HTMLButtonElement).click();
+        expect(input.value).toBe("");
+      });
+
+      it("ne filtre qu'une fois la frappe terminée (délai de 150 ms recommencé à chaque touche)", async () => {
+        const input = await open([makeItem({ id: "a", name: "Pommes" }), makeItem({ id: "b", name: "Bananes" })]);
+        type(input, "ban");
+        vi.advanceTimersByTime(100);
+        type(input, "bana");
+        vi.advanceTimersByTime(60); // 160 ms après la première frappe
+        expect(names().sort()).toEqual(["Bananes", "Pommes"]);
+        vi.advanceTimersByTime(90);
+        expect(names()).toEqual(["Bananes"]);
+      });
+    });
+  });
+  describe("détails de comportement (mutation) — 2", () => {
+    const keydown = (key: string) => document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    const importParam = () => encodeListToParam({ name: "Reçue", items: [makeItem({ id: "x" })], categories: [makeCategory({ id: "cx" })], history: [] });
+
+    describe("modale d'import", () => {
+      it("résume le contenu du fichier", async () => {
+        await mount(sampleState(), false, importParam());
+        expect(document.querySelector(".modal-overlay p")!.textContent).toBe("1 article(s) et 1 catégorie(s) trouvés dans le fichier.");
+      });
+
+      it("Échap la ferme une seule fois, rend le focus et retire son écouteur ; une autre touche ne fait rien", async () => {
+        await mount(sampleState(), false, importParam());
+        const release = focusReleases[0];
+        keydown("a");
+        expect(document.querySelector(".modal-overlay")).not.toBeNull();
+
+        keydown("Escape");
+        keydown("Escape");
+
+        expect(document.querySelector(".modal-overlay")).toBeNull();
+        expect(release).toHaveBeenCalledTimes(1);
+      });
+
+      it.each([["#import-cancel"], [".modal-close"]])("%s ferme la modale et rend le focus", async (selector) => {
+        await mount(sampleState(), false, importParam());
+        (document.querySelector(selector) as HTMLElement).click();
+        expect(document.querySelector(".modal-overlay")).toBeNull();
+        expect(focusReleases[0]).toHaveBeenCalledOnce();
+      });
+
+      it("fusionner envoie l'import puis ferme", async () => {
+        const conn = await mount(sampleState(), false, importParam());
+        (document.querySelector("#import-merge") as HTMLElement).click();
+        expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: "importState", mode: "merge" }));
+        expect(document.querySelector(".modal-overlay")).toBeNull();
+        expect(focusReleases[0]).toHaveBeenCalledOnce();
+      });
+
+      it("remplacer demande confirmation (texte exact) ; refusé : rien n'est envoyé, la modale reste", async () => {
+        const confirmSpy = vi.fn(() => false);
+        vi.stubGlobal("confirm", confirmSpy);
+        const conn = await mount(sampleState(), false, importParam());
+        (document.querySelector("#import-replace") as HTMLElement).click();
+
+        expect(confirmSpy).toHaveBeenCalledWith("Remplacer entièrement la liste actuelle par le contenu du fichier ?");
+        expect(conn.send).not.toHaveBeenCalled();
+        expect(document.querySelector(".modal-overlay")).not.toBeNull();
+
+        confirmSpy.mockReturnValue(true);
+        (document.querySelector("#import-replace") as HTMLElement).click();
+        expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: "importState", mode: "replace" }));
+        expect(document.querySelector(".modal-overlay")).toBeNull();
+        expect(focusReleases[0]).toHaveBeenCalledOnce();
+      });
+
+      it("un clic sur le fond la ferme, un clic dans la fenêtre non", async () => {
+        await mount(sampleState(), false, importParam());
+        (document.querySelector(".modal") as HTMLElement).click();
+        expect(document.querySelector(".modal-overlay")).not.toBeNull();
+        (document.querySelector(".modal-overlay") as HTMLElement).click();
+        expect(document.querySelector(".modal-overlay")).toBeNull();
+      });
+    });
+
+    describe("photos", () => {
+      it("le sélecteur n'accepte que des images et s'ouvre aussitôt", async () => {
+        const click = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+        await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+        (root.querySelector(".item-photo") as HTMLButtonElement).click();
+        const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+        expect(input.accept).toBe("image/*");
+        expect(click).toHaveBeenCalledOnce();
+      });
+
+      it("une photo d'exactement la taille maximale est acceptée, un octet de plus est refusé", async () => {
+        uploadItemPhoto.mockResolvedValue("pid");
+        const conn = await mount(sampleState({ items: [makeItem({ id: "i1" })] }));
+        const pick = (size: number) => {
+          (root.querySelector(".item-photo") as HTMLButtonElement).click();
+          const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+          const file = new File(["x"], "p.jpg", { type: "image/jpeg" });
+          Object.defineProperty(file, "size", { value: size });
+          Object.defineProperty(input, "files", { value: [file], configurable: true });
+          input.dispatchEvent(new Event("change"));
+        };
+        pick(8 * 1024 * 1024);
+        await vi.waitFor(() => expect(conn.send).toHaveBeenCalledWith({ type: "updateItem", id: "i1", photoId: "pid" }));
+
+        conn.send.mockClear();
+        pick(8 * 1024 * 1024 + 1);
+        await vi.waitFor(() => expect(document.querySelector(".toast")?.textContent).toBe("Photo trop volumineuse."));
+        expect(conn.send).not.toHaveBeenCalled();
+      });
+
+      describe("visionneuse", () => {
+        const openViewer = async () => {
+          await mount(sampleState({ items: [makeItem({ id: "i1", photoId: "photo1" })] }));
+          (root.querySelector(".item-photo") as HTMLButtonElement).click();
+          return focusReleases[focusReleases.length - 1];
+        };
+
+        it("Échap la ferme une seule fois et rend le focus", async () => {
+          const release = await openViewer();
+          keydown("x");
+          expect(document.querySelector(".photo-viewer-modal")).not.toBeNull();
+          keydown("Escape");
+          keydown("Escape");
+          expect(document.querySelector(".photo-viewer-modal")).toBeNull();
+          expect(release).toHaveBeenCalledTimes(1);
+        });
+
+        it("un clic dans la fenêtre ne la ferme pas, un clic sur le fond oui", async () => {
+          const release = await openViewer();
+          (document.querySelector(".photo-viewer-modal") as HTMLElement).click();
+          expect(document.querySelector(".photo-viewer-modal")).not.toBeNull();
+          (document.querySelector(".modal-overlay") as HTMLElement).click();
+          expect(document.querySelector(".photo-viewer-modal")).toBeNull();
+          expect(release).toHaveBeenCalledOnce();
+        });
+      });
+    });
+
+    describe("vider les articles cochés", () => {
+      it("n'arme le bouton que s'il y a des articles cochés, avec son libellé de confirmation", async () => {
+        await mount(sampleState({ items: [makeItem({ id: "a" }), makeItem({ id: "b", checked: true })] }));
+        const btn = root.querySelector('[data-action="clear-checked"]') as HTMLElement;
+        const call = findConfirm(btn) as unknown as { opts: { isDisabled: () => boolean; armedText: string } };
+        expect(call.opts.armedText).toBe("Confirmer : tout vider ?");
+        expect(call.opts.isDisabled()).toBe(false);
+      });
+
+      it("désactivé sans article coché", async () => {
+        await mount(sampleState({ items: [makeItem({ id: "a" })] }));
+        const call = findConfirm(root.querySelector('[data-action="clear-checked"]') as HTMLElement);
+        expect(call.opts.isDisabled!()).toBe(true);
+      });
+
+      it("l'annulation restaure les articles sans notifier leur « ajout » et indique leur nombre", async () => {
+        const conn = await mount(sampleState({ items: [makeItem({ id: "a", checked: true }), makeItem({ id: "b", checked: true })] }));
+        findConfirm(root.querySelector('[data-action="clear-checked"]') as HTMLElement).opts.onConfirm();
+        expect(document.querySelector(".undo-toast span")!.textContent).toBe("2 article(s) coché(s) vidé(s)");
+
+        conn.emitState(sampleState({ items: [] })); // le serveur a vidé les articles
+        (document.querySelector(".undo-toast button") as HTMLButtonElement).click();
+        conn.emitState(sampleState({ items: [makeItem({ id: "a", checked: true }), makeItem({ id: "b", checked: true })] }));
+
+        expect(notifyItemAdded).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("gestion des catégories", () => {
+      const cats = () => [makeCategory({ id: "c1", name: "Fruits", order: 0 }), makeCategory({ id: "c2", name: "Légumes", order: 1 })];
+      const openManager = async (extra: Partial<ListState> = {}) => {
+        const conn = await mount(sampleState({ categories: cats(), ...extra }));
+        root.querySelector('[data-action="manage-categories"]')?.dispatchEvent(new Event("click"));
+        return conn;
+      };
+
+      it("n'insère aucun texte parasite dans la liste et marque l'état déplié de la palette", async () => {
+        await openManager();
+        const toggles = () => Array.from(document.querySelectorAll(".color-swatch-toggle"));
+        expect(toggles().map((b) => b.getAttribute("aria-expanded"))).toEqual(["false", "false"]);
+        (toggles()[0] as HTMLElement).click();
+        expect(toggles().map((b) => b.getAttribute("aria-expanded"))).toEqual(["true", "false"]);
+        const stray = Array.from(document.querySelectorAll(".manage-category-list, .manage-category-list li"))
+          .flatMap((el) => Array.from(el.childNodes).filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== ""));
+        expect(stray).toHaveLength(0);
+      });
+
+      it("renommer propose le nom actuel comme valeur de départ", async () => {
+        await openManager();
+        const name = document.querySelector(".cat-name") as HTMLElement;
+        name.click();
+        expect(findStartEdit(name).opts.value).toBe("Fruits");
+      });
+
+      it("supprimer la seconde catégorie : libellé de confirmation, annulation limitée à ses articles", async () => {
+        const conn = await openManager({ items: [makeItem({ id: "i1", categoryId: "c1" }), makeItem({ id: "i2", categoryId: "c2" })] });
+        const del = document.querySelectorAll('.modal [data-action="del"]')[1] as HTMLElement;
+        const call = findConfirm(del) as unknown as { opts: { armedLabel: string; onConfirm: () => void } };
+        expect(call.opts.armedLabel).toBe("Confirmer la suppression de « Légumes »");
+
+        call.opts.onConfirm();
+        expect(document.querySelector(".undo-toast span")!.textContent).toBe("Catégorie « Légumes » supprimée");
+        (document.querySelector(".undo-toast button") as HTMLButtonElement).click();
+
+        expect(conn.send).toHaveBeenCalledWith({ type: "restoreCategory", category: cats()[1], itemIds: ["i2"] });
+      });
+
+      it("ajouter une catégorie : bloque l'envoi natif, recadre le nom et vide le champ", async () => {
+        const conn = await openManager();
+        const form = document.querySelector("#new-category-form") as HTMLFormElement;
+        const input = document.querySelector("#new-category-name") as HTMLInputElement;
+        input.value = "  Boissons  ";
+        const event = new Event("submit", { bubbles: true, cancelable: true });
+        form.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: "addCategory", name: "Boissons" }));
+        expect(input.value).toBe("");
+      });
+
+      it("le glisser-déposer cible la liste et ses lignes, et envoie l'ordre obtenu", async () => {
+        const conn = await openManager();
+        const dnd = findDnd(".category-manage-drag-handle");
+        expect(dnd.opts.containerSelector).toBe(".manage-category-list");
+        expect(dnd.opts.itemSelector).toBe("li");
+
+        const list = document.querySelector(".manage-category-list")!;
+        list.append(list.children[0]); // c1 passe après c2
+        dnd.opts.onDrop(list.children[0] as HTMLElement);
+
+        expect(conn.send).toHaveBeenCalledWith({ type: "reorderCategories", orderedIds: ["c2", "c1"] });
+      });
+
+      it("à la fermeture : libère le focus, arrête d'écouter l'état et retire l'écouteur clavier", async () => {
+        const conn = await openManager();
+        const release = focusReleases[focusReleases.length - 1];
+        const dnd = findDnd(".category-manage-drag-handle");
+        const callsBefore = enableDragReorder.mock.calls.length;
+
+        keydown("Escape");
+        expect(document.querySelector(".modal-overlay")).toBeNull();
+        expect(release).toHaveBeenCalledOnce();
+        expect(dnd.dispose).toHaveBeenCalled();
+
+        conn.emitState(sampleState({ categories: cats() }));
+        keydown("Escape");
+        expect(enableDragReorder.mock.calls.length).toBe(callsBefore);
+        expect(release).toHaveBeenCalledOnce();
+      });
+    });
+
+    describe("gestion des suggestions", () => {
+      it("libellé et état exacts du bouton favori", async () => {
+        await mount(sampleState({ history: [makeHistory({ key: "pommes", label: "Pommes", favorite: true }), makeHistory({ key: "poires", label: "Poires" })] }));
+        root.querySelector('[data-action="manage-suggestions"]')?.dispatchEvent(new Event("click"));
+        const on = document.querySelector('.suggestion-favorite[data-key="pommes"]')!;
+        const off = document.querySelector('.suggestion-favorite[data-key="poires"]')!;
+        expect([on.getAttribute("aria-label"), on.getAttribute("aria-pressed")]).toEqual(["Retirer des favoris", "true"]);
+        expect([off.getAttribute("aria-label"), off.getAttribute("aria-pressed")]).toEqual(["Ajouter aux favoris", "false"]);
+      });
+    });
+  });
+  describe("détails de comportement (mutation) — 3", () => {
+    const keydown = (key: string) => document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    const strayText = (selector: string) =>
+      Array.from(document.querySelectorAll(selector)).flatMap((el) =>
+        Array.from(el.childNodes)
+          .filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== "")
+          .map((n) => n.textContent),
+      );
+    const itemNames = () => Array.from(root.querySelectorAll(".item-name")).map((el) => el.textContent);
+    const sections = () => Array.from(root.querySelectorAll(".category-name")).map((el) => el.textContent);
+    const submitAdd = () => (root.querySelector("#add-form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    const typeAdd = (value: string) => {
+      const input = root.querySelector("#add-input") as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new Event("input"));
+    };
+    const hist = (label: string, extra: Partial<HistoryEntry> = {}) => makeHistory({ key: label.toLowerCase(), label, ...extra });
+
+    describe("suggestions (gestion)", () => {
+      const openSuggestions = () => root.querySelector('[data-action="manage-suggestions"]')?.dispatchEvent(new Event("click"));
+
+      it("renommer propose le libellé actuel ; un nom vide redessine la liste", async () => {
+        await mount(sampleState({ history: [hist("Pommes")] }));
+        openSuggestions();
+        const name = document.querySelector(".suggestion-name") as HTMLElement;
+        name.click();
+        expect(findStartEdit(name).opts.value).toBe("Pommes");
+
+        name.setAttribute("data-marker", "1");
+        findStartEdit(name).opts.onCommit("");
+        expect(document.querySelector(".suggestion-name")!.hasAttribute("data-marker")).toBe(false);
+      });
+
+      it("renommer sans changer la clé garde les attributs data-key", async () => {
+        const conn = await mount(sampleState({ history: [hist("Pommes")] }));
+        openSuggestions();
+        const name = document.querySelector(".suggestion-name") as HTMLElement;
+        name.click();
+        findStartEdit(name).opts.onCommit("pommes");
+        expect(conn.send).toHaveBeenCalledWith({ type: "updateHistoryEntry", key: "pommes", label: "pommes" });
+        expect(name.dataset.key).toBe("pommes");
+      });
+
+      it("supprimer la seconde suggestion : libellé de confirmation, annulation sur la bonne entrée", async () => {
+        const history = [hist("Bananes"), hist("Pommes")];
+        const conn = await mount(sampleState({ history }));
+        openSuggestions();
+        const del = document.querySelectorAll('.modal [data-action="del"]');
+        const second = Array.from(del).find((b) => b.getAttribute("data-key") === "pommes") as HTMLElement;
+        const call = findConfirm(second) as unknown as { opts: { armedLabel: string; onConfirm: () => void } };
+        expect(call.opts.armedLabel).toBe("Confirmer la suppression de la suggestion « Pommes »");
+
+        call.opts.onConfirm();
+        expect(document.querySelector(".undo-toast span")!.textContent).toBe("Suggestion « Pommes » supprimée");
+        (document.querySelector(".undo-toast button") as HTMLButtonElement).click();
+        expect(conn.send).toHaveBeenCalledWith({ type: "restoreHistoryEntry", entry: history[1] });
+      });
+
+      it("recherche : requête recadrée, favoris et autres triés, message sans résultat recadré", async () => {
+        await mount(sampleState({ history: [hist("Pommes", { favorite: true }), hist("Poires", { favorite: true }), hist("Bananes"), hist("Abricots")] }));
+        openSuggestions();
+        const labels = () => Array.from(document.querySelectorAll(".suggestion-name")).map((el) => el.textContent);
+        expect(labels()).toEqual(["Poires", "Pommes", "Abricots", "Bananes"]);
+
+        const search = document.querySelector("#suggestion-search") as HTMLInputElement;
+        search.value = "  pom ";
+        search.dispatchEvent(new Event("input"));
+        expect(labels()).toEqual(["Pommes"]);
+
+        search.value = "  zzz  ";
+        search.dispatchEvent(new Event("input"));
+        expect(document.querySelector("#suggestion-list .hint")!.textContent).toBe("Aucune suggestion ne correspond à « zzz ».");
+      });
+
+      it("n'insère aucun texte parasite, avec ou sans favoris", async () => {
+        await mount(sampleState({ history: [hist("A", { favorite: true }), hist("B", { favorite: true }), hist("C"), hist("D")] }));
+        openSuggestions();
+        expect(strayText("#suggestion-list, .manage-suggestion-list, .modal")).toEqual([]);
+        expect(Array.from(document.querySelectorAll("#suggestion-list h3")).map((h) => h.textContent)).toEqual(["Favoris", "Autres"]);
+      });
+
+      it("sans historique : pas de champ de recherche ni de texte parasite", async () => {
+        await mount(sampleState({ history: [] }));
+        openSuggestions();
+        expect(document.querySelector("#suggestion-search")).toBeNull();
+        expect(strayText(".modal")).toEqual([]);
+      });
+
+      it("seulement des autres : aucun sous-titre « Autres » ; seulement des favoris : un seul sous-titre", async () => {
+        await mount(sampleState({ history: [hist("C"), hist("D")] }));
+        openSuggestions();
+        expect(document.querySelectorAll("#suggestion-list h3")).toHaveLength(0);
+        expect(strayText("#suggestion-list")).toEqual([]);
+        keydown("Escape");
+        cleanup();
+        await mount(sampleState({ history: [hist("A", { favorite: true })] }));
+        openSuggestions();
+        expect(Array.from(document.querySelectorAll("#suggestion-list h3")).map((h) => h.textContent)).toEqual(["Favoris"]);
+        expect(strayText("#suggestion-list")).toEqual([]);
+      });
+
+      it("fermeture : bouton, focus rendu, abonnement à l'état et écouteur clavier retirés", async () => {
+        const conn = await mount(sampleState({ history: [hist("Pommes")] }));
+        openSuggestions();
+        const release = focusReleases[focusReleases.length - 1];
+        const list = document.querySelector("#suggestion-list") as HTMLElement;
+        (document.querySelector(".modal-close") as HTMLElement).click();
+        expect(document.querySelector(".modal-overlay")).toBeNull();
+        expect(release).toHaveBeenCalledOnce();
+
+        conn.emitState(sampleState({ history: [hist("Pommes"), hist("Poires")] }));
+        expect(list.querySelectorAll(".suggestion-name")).toHaveLength(1);
+        keydown("Escape");
+        expect(release).toHaveBeenCalledOnce();
+      });
+    });
+
+    describe("ajout d'un article", () => {
+      it("bloque l'envoi natif, recadre le texte, remet l'interface à zéro et rend le focus au champ", async () => {
+        const conn = await mount(sampleState({ history: [hist("Pommes")] }));
+        const input = root.querySelector("#add-input") as HTMLInputElement;
+        input.focus();
+        typeAdd("  pom ");
+        const preview = root.querySelector("#add-preview-qty") as HTMLElement;
+        const suggestions = root.querySelector("#suggestions") as HTMLElement;
+        preview.hidden = false;
+        expect(suggestions.hidden).toBe(false);
+
+        const event = new Event("submit", { bubbles: true, cancelable: true });
+        (root.querySelector("#add-form") as HTMLFormElement).dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: "addItem", rawText: "pom" }));
+        expect(input.value).toBe("");
+        expect(preview.hidden).toBe(true);
+        expect(suggestions.hidden).toBe(true);
+        expect(document.activeElement).toBe(input);
+      });
+
+      it("ne notifie pas l'article qu'on vient d'ajouter soi-même quand il revient dans l'état", async () => {
+        const conn = await mount(sampleState());
+        typeAdd("Pommes");
+        submitAdd();
+        const sent = conn.send.mock.calls[0][0] as { id: string };
+
+        conn.emitState(sampleState({ items: [makeItem({ id: sent.id, name: "Pommes" })] }));
+
+        expect(notifyItemAdded).not.toHaveBeenCalled();
+      });
+
+      it("l'ajout depuis une suggestion ou une puce ne notifie pas non plus", async () => {
+        const conn = await mount(sampleState({ history: [hist("Pommes")] }));
+        (root.querySelector(".chip") as HTMLButtonElement).click();
+        const sent = conn.send.mock.calls[0][0] as { id: string };
+        conn.emitState(sampleState({ history: [hist("Pommes")], items: [makeItem({ id: sent.id, name: "Pommes" })] }));
+        expect(notifyItemAdded).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("suggestions à la saisie", () => {
+      it("requête recadrée, seules les suggestions correspondantes (6 au plus) sont listées, triées", async () => {
+        const history = ["Pomme", "Pommade", "Pomelo", "Pompon", "Pomerol", "Pomponnette", "Pommeau", "Banane"].map((l) => hist(l));
+        await mount(sampleState({ history: history.reverse() }));
+        typeAdd("  pom ");
+        const labels = Array.from(root.querySelectorAll("#suggestions button")).map((b) => b.textContent);
+        expect(labels).toHaveLength(6);
+        expect(labels).not.toContain("Banane");
+        expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)));
+        expect(strayText("#suggestions")).toEqual([]);
+      });
+
+      it("choisir une suggestion : empêche la perte de focus, ajoute la bonne entrée et remet le champ à zéro", async () => {
+        const conn = await mount(sampleState({ history: [hist("Pommes"), hist("Pommade")] }));
+        typeAdd("pom");
+        const preview = root.querySelector("#add-preview-qty") as HTMLElement;
+        preview.hidden = false;
+        const buttons = Array.from(root.querySelectorAll("#suggestions button")) as HTMLButtonElement[];
+        const second = buttons[0];
+        const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+
+        second.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: "addItem", rawText: second.textContent }));
+        expect((root.querySelector("#add-input") as HTMLInputElement).value).toBe("");
+        expect(preview.hidden).toBe(true);
+      });
+    });
+
+    describe("puces de suggestions rapides", () => {
+      it("limitées à 12, triées, sans texte parasite", async () => {
+        const history = Array.from({ length: 13 }, (_, i) => hist(`Article ${String.fromCharCode(97 + i)}`));
+        await mount(sampleState({ history: [...history].reverse() }));
+        const chips = Array.from(root.querySelectorAll(".chip")).map((c) => c.textContent);
+        expect(chips).toHaveLength(12);
+        expect(chips[0]).toBe("+ Article a");
+        expect(strayText(".chip-row")).toEqual([]);
+      });
+
+      it("cliquer la seconde puce ajoute la seconde suggestion", async () => {
+        const conn = await mount(sampleState({ history: [hist("Abricots"), hist("Bananes")] }));
+        (root.querySelectorAll(".chip")[1] as HTMLButtonElement).click();
+        expect(conn.send).toHaveBeenCalledWith(expect.objectContaining({ type: "addItem", rawText: "Bananes" }));
+      });
+
+      it("ne propose pas ce qui est déjà dans la liste non cochée (nom recadré), mais propose ce qui est coché", async () => {
+        await mount(
+          sampleState({
+            history: [hist("Pommes"), hist("Poires"), hist("Kiwis")],
+            items: [makeItem({ id: "a", name: " Pommes " }), makeItem({ id: "b", name: "Poires", checked: true })],
+          }),
+        );
+        expect(Array.from(root.querySelectorAll(".chip")).map((c) => c.textContent)).toEqual(["+ Kiwis", "+ Poires"]);
+      });
+    });
+
+    describe("affichage de la liste", () => {
+      it("tri manuel par défaut, alphabétique si choisi, cochés toujours en dernier", async () => {
+        const items = [
+          makeItem({ id: "a", name: "Cerises", order: 0 }),
+          makeItem({ id: "b", name: "Abricots", order: 2, checked: true }),
+          makeItem({ id: "c", name: "Bananes", order: 1 }),
+          makeItem({ id: "d", name: "Dattes", order: 3 }),
+        ];
+        await mount(sampleState({ items }));
+        expect(itemNames()).toEqual(["Cerises", "Bananes", "Dattes", "Abricots"]);
+        (root.querySelector('[data-action="item-sort"]') as HTMLElement).click();
+        expect(itemNames()).toEqual(["Bananes", "Cerises", "Dattes", "Abricots"]);
+      });
+
+      it("catégories par ordre, la catégorie entièrement cochée passe après, « Sans catégorie » en dernier", async () => {
+        const categories = [makeCategory({ id: "c1", name: "Z", order: 1 }), makeCategory({ id: "c2", name: "Y", order: 0 }), makeCategory({ id: "c3", name: "X", order: 2 })];
+        const items = [
+          makeItem({ id: "a", categoryId: "c1" }),
+          makeItem({ id: "b", categoryId: "c2", checked: true }),
+          makeItem({ id: "c", categoryId: "c3" }),
+          makeItem({ id: "d", categoryId: null }),
+        ];
+        await mount(sampleState({ categories, items }));
+        expect(sections()).toEqual(["Z", "X", "Sans catégorie", "Y"]);
+      });
+
+      it("une catégorie mi-cochée reste avant celles encore à faire dans l'ordre", async () => {
+        const categories = [makeCategory({ id: "c1", name: "A", order: 0 }), makeCategory({ id: "c2", name: "B", order: 1 })];
+        const items = [
+          makeItem({ id: "a1", categoryId: "c1", checked: true }),
+          makeItem({ id: "a2", categoryId: "c1" }),
+          makeItem({ id: "b1", categoryId: "c2" }),
+        ];
+        await mount(sampleState({ categories, items }));
+        expect(sections()).toEqual(["A", "B"]);
+      });
+
+      it("sans catégorie du tout : aucune en-tête ; avec catégories mais sans article libre : pas de « Sans catégorie »", async () => {
+        await mount(sampleState({ items: [makeItem({ id: "a" })] }));
+        expect(root.querySelectorAll(".category-header")).toHaveLength(0);
+        cleanup();
+        await mount(sampleState({ categories: [makeCategory({ id: "c1" })], items: [makeItem({ id: "a", categoryId: "c1" })] }));
+        expect(sections()).toEqual(["Fruits"]);
+      });
+
+      it("recherche recadrée et message sans résultat recadré", async () => {
+        await mount(sampleState({ items: [makeItem({ id: "a", name: "Pommes" })] }));
+        (root.querySelector("#btn-search") as HTMLButtonElement).click();
+        const input = root.querySelector("#search-input") as HTMLInputElement;
+        input.value = "  pom ";
+        input.dispatchEvent(new Event("input"));
+        vi.advanceTimersByTime(150);
+        expect(itemNames()).toEqual(["Pommes"]);
+
+        input.value = "  zzz ";
+        input.dispatchEvent(new Event("input"));
+        vi.advanceTimersByTime(150);
+        expect(root.querySelector(".empty-state")!.textContent).toBe("Aucun article ne correspond à « zzz ».");
+      });
+
+      it("rechercher dans une liste vide ne plante pas (aucun rendu complet n'a encore eu lieu)", async () => {
+        await mount(sampleState());
+        (root.querySelector("#btn-search") as HTMLButtonElement).click();
+        const input = root.querySelector("#search-input") as HTMLInputElement;
+        input.value = "x";
+        input.dispatchEvent(new Event("input"));
+        expect(() => vi.advanceTimersByTime(150)).not.toThrow();
+        expect(root.querySelector(".empty-state")).not.toBeNull();
+      });
+    });
+  });
+  describe("détails de comportement (mutation) — 4", () => {
+    const strayText = (selector: string) =>
+      Array.from(document.querySelectorAll(selector)).flatMap((el) =>
+        Array.from(el.childNodes)
+          .filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== "")
+          .map((n) => n.textContent),
+      );
+    const two = () => [makeItem({ id: "i1", name: "Pommes", order: 0, quantity: "1" }), makeItem({ id: "i2", name: "Poires", order: 1, quantity: "2" })];
+    const rowOf = (id: string) => root.querySelector(`.item[data-id="${id}"]`) as HTMLElement;
+
+    it("une liste sans article affiche le message d'accueil, pas de sections", async () => {
+      await mount(sampleState());
+      expect(root.querySelector(".empty-state")!.textContent).toContain("Ta liste est vide");
+      expect(root.querySelectorAll(".category-section")).toHaveLength(0);
+    });
+
+    it("structure des sections : couleur, poignées, pastille, compteur d'articles restants, aucun texte parasite", async () => {
+      const categories = [makeCategory({ id: "c1", name: "Fruits", order: 0, color: 120 }), makeCategory({ id: "c2", name: "Légumes", order: 1 })];
+      const items = [
+        makeItem({ id: "a", categoryId: "c1" }),
+        makeItem({ id: "b", categoryId: "c1", checked: true }),
+        makeItem({ id: "c", categoryId: "c1" }),
+        makeItem({ id: "d", categoryId: "c2" }),
+        makeItem({ id: "e", categoryId: null }),
+      ];
+      await mount(sampleState({ categories, items }));
+      const [fruits, legumes, free] = Array.from(root.querySelectorAll(".category-section")) as HTMLElement[];
+
+      expect(fruits.classList.contains("has-color")).toBe(true);
+      expect(fruits.getAttribute("style")).toBe("--cat-hue: 120");
+      expect(fruits.querySelector(".category-drag-handle")!.getAttribute("aria-label")).toBe("Réordonner la catégorie");
+      expect(fruits.querySelector(".category-dot")).not.toBeNull();
+      expect(fruits.querySelector(".category-count")!.textContent).toBe("2");
+      expect(legumes.getAttribute("style")).toMatch(/^--cat-hue: \d+/);
+
+      expect(free.classList.contains("has-color")).toBe(false);
+      expect(free.hasAttribute("style")).toBe(false);
+      expect(free.querySelector(".category-drag-handle")).toBeNull();
+      expect(free.querySelector(".category-dot")).toBeNull();
+      expect(free.querySelector(".drag-handle-spacer")).not.toBeNull();
+      expect(free.querySelector(".category-count")!.textContent).toBe("1");
+
+      expect(strayText("#categories, .category-section, .item-list")).toEqual([]);
+    });
+
+    it("une liste sans catégorie n'a ni en-tête ni texte parasite", async () => {
+      await mount(sampleState({ items: two() }));
+      expect(root.querySelector(".category-header")).toBeNull();
+      expect(root.querySelector(".category-section")!.hasAttribute("style")).toBe(false);
+      expect(strayText("#categories, .category-section, .item-list")).toEqual([]);
+    });
+
+    it("cocher un article envoie toggleItem et fait vibrer l'appareil seulement à la coche", async () => {
+      const vibrate = vi.fn();
+      vi.stubGlobal("navigator", { ...navigator, vibrate });
+      const conn = await mount(sampleState({ items: two() }));
+      const check = rowOf("i2").querySelector(".item-check") as HTMLInputElement;
+
+      check.checked = true;
+      check.dispatchEvent(new Event("change"));
+      expect(conn.send).toHaveBeenCalledWith({ type: "toggleItem", id: "i2", checked: true });
+      expect(vibrate).toHaveBeenCalledWith(10);
+
+      vibrate.mockClear();
+      check.checked = false;
+      check.dispatchEvent(new Event("change"));
+      expect(vibrate).not.toHaveBeenCalled();
+    });
+
+    it("les actions ciblent bien le second article (priorité, photo, nom, quantité)", async () => {
+      uploadItemPhoto.mockResolvedValue("p");
+      const conn = await mount(sampleState({ items: two() }));
+
+      (rowOf("i2").querySelector(".item-priority") as HTMLButtonElement).click();
+      expect(conn.send).toHaveBeenCalledWith({ type: "updateItem", id: "i2", priority: 2 });
+
+      (rowOf("i2").querySelector(".item-photo") as HTMLButtonElement).click();
+      const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+      Object.defineProperty(input, "files", { value: [new File(["x"], "a.jpg", { type: "image/jpeg" })], configurable: true });
+      input.dispatchEvent(new Event("change"));
+      await vi.waitFor(() => expect(conn.send).toHaveBeenCalledWith({ type: "updateItem", id: "i2", photoId: "p" }));
+
+      const name = rowOf("i2").querySelector(".item-name") as HTMLElement;
+      name.click();
+      expect(findStartEdit(name).opts.value).toBe("Poires");
+      findStartEdit(name).opts.onCommit("Poires bio");
+      expect(conn.send).toHaveBeenCalledWith({ type: "updateItem", id: "i2", name: "Poires bio" });
+
+      const qty = rowOf("i2").querySelector(".qty-badge") as HTMLElement;
+      qty.click();
+      expect(findStartEdit(qty).opts.value).toBe("2");
+      expect(findStartEdit(qty).opts.placeholder).toBe("ex: 2, 500 g");
+    });
+
+    it("supprimer le second article : libellé de confirmation, annulation sans notification de retour", async () => {
+      const conn = await mount(sampleState({ items: two() }));
+      const btn = rowOf("i2").querySelector('[data-action="delete-item"]') as HTMLElement;
+      const call = findConfirm(btn) as unknown as { opts: { armedLabel: string; onConfirm: () => void } };
+      expect(call.opts.armedLabel).toBe("Confirmer la suppression de « Poires »");
+
+      call.opts.onConfirm();
+      expect(document.querySelector(".undo-toast span")!.textContent).toBe("« Poires » supprimé");
+      conn.emitState(sampleState({ items: [two()[0]] }));
+      (document.querySelector(".undo-toast button") as HTMLButtonElement).click();
+      expect(conn.send).toHaveBeenCalledWith({ type: "restoreItems", items: [two()[1]] });
+
+      conn.emitState(sampleState({ items: two() }));
+      expect(notifyItemAdded).not.toHaveBeenCalled();
+    });
+
+    it("le balayage supprime aussi sans notifier le retour à l'annulation", async () => {
+      const conn = await mount(sampleState({ items: two() }));
+      findSwipe().opts.onDelete(rowOf("i2"));
+      conn.emitState(sampleState({ items: [two()[0]] }));
+      (document.querySelector(".undo-toast button") as HTMLButtonElement).click();
+      conn.emitState(sampleState({ items: two() }));
+      expect(notifyItemAdded).not.toHaveBeenCalled();
+    });
+
+    it("renommer un article avec un nom vide redessine la liste", async () => {
+      await mount(sampleState({ items: two() }));
+      const name = rowOf("i1").querySelector(".item-name") as HTMLElement;
+      name.click();
+      name.setAttribute("data-marker", "1");
+      findStartEdit(name).opts.onCommit("");
+      expect(root.querySelector(".item-name")!.hasAttribute("data-marker")).toBe(false);
+    });
+
+    it("renommer une catégorie propose son nom ; l'en-tête « Sans catégorie » n'est pas modifiable", async () => {
+      await mount(sampleState({ categories: [makeCategory({ id: "c1", name: "Fruits" })], items: [makeItem({ id: "a", categoryId: "c1" }), makeItem({ id: "b", categoryId: null })] }));
+      const names = Array.from(root.querySelectorAll(".category-name")) as HTMLElement[];
+      names[0].click();
+      expect(findStartEdit(names[0]).opts.value).toBe("Fruits");
+
+      const before = startEdit.mock.calls.length;
+      names[1].click();
+      expect(startEdit.mock.calls.length).toBe(before);
+    });
+
+    it("le glisser-déposer des articles cible les listes et les lignes, et traite le bon article", async () => {
+      const categories = [makeCategory({ id: "c1", name: "Fruits" }), makeCategory({ id: "c2", name: "Légumes", order: 1 })];
+      const items = [makeItem({ id: "i1", categoryId: "c1" }), makeItem({ id: "i2", categoryId: "c1", order: 1 })];
+      const conn = await mount(sampleState({ categories, items }));
+      const dnd = findDnd(".item-drag-handle");
+      expect(dnd.opts.containerSelector).toBe(".item-list");
+      expect(dnd.opts.itemSelector).toBe(".item");
+
+      // Le seul article i2 est déjà dans c1 : l'amener dans c1 ne change pas sa catégorie.
+      conn.send.mockClear();
+      dnd.opts.onDrop(rowOf("i2"));
+      expect(conn.send).toHaveBeenCalledTimes(1);
+      expect(conn.send).toHaveBeenCalledWith({ type: "reorderItems", orderedIds: ["i1", "i2"] });
+    });
+  });
+  describe("détails de comportement (mutation) — 5", () => {
+    const rowOf = (id: string) => root.querySelector(`.item[data-id="${id}"]`) as HTMLElement;
+
+    it("le glisser-déposer des catégories cible la zone et les sections, et envoie l'ordre sans « Sans catégorie »", async () => {
+      const categories = [makeCategory({ id: "c1", name: "A", order: 0 }), makeCategory({ id: "c2", name: "B", order: 1 })];
+      const items = [makeItem({ id: "a", categoryId: "c1" }), makeItem({ id: "b", categoryId: "c2" }), makeItem({ id: "c", categoryId: null })];
+      const conn = await mount(sampleState({ categories, items }));
+      const dnd = findDnd(".category-drag-handle");
+      expect(dnd.opts.containerSelector).toBe("#categories");
+      expect(dnd.opts.itemSelector).toBe(".category-section");
+
+      const container = root.querySelector("#categories")!;
+      container.prepend(container.children[1]); // B avant A
+      conn.send.mockClear();
+      dnd.opts.onDrop(container.children[0] as HTMLElement);
+
+      expect(conn.send).toHaveBeenCalledWith({ type: "reorderCategories", orderedIds: ["c2", "c1"] });
+    });
+
+    it("le balayage cible les lignes et leur contenu, ignore les commandes, supprime le bon article", async () => {
+      const items = [makeItem({ id: "i1", name: "Pommes" }), makeItem({ id: "i2", name: "Poires", order: 1 })];
+      const conn = await mount(sampleState({ items }));
+      const opts = findSwipe().opts as unknown as { itemSelector: string; contentSelector: string; ignoreSelector: string; onDelete: (el: HTMLElement) => void };
+      expect([opts.itemSelector, opts.contentSelector, opts.ignoreSelector]).toEqual([".item", ".item-content", ".item-drag-handle, .item-check, .item-priority, .item-delete"]);
+
+      opts.onDelete(rowOf("i2"));
+      expect(conn.send).toHaveBeenCalledWith({ type: "deleteItem", id: "i2" });
+      expect(document.querySelector(".undo-toast span")!.textContent).toBe("« Poires » supprimé");
+    });
+
+    it("une ligne d'article reflète son état coché et sa quantité", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "a", checked: true, quantity: "2 kg" }), makeItem({ id: "b", quantity: "" })] }));
+      const a = rowOf("a");
+      const b = rowOf("b");
+      expect(a.classList.contains("checked")).toBe(true);
+      expect(b.classList.contains("checked")).toBe(false);
+      expect(a.className.trim().split(/\s+/)).toEqual(["item", "checked"]);
+      expect(b.className.trim().split(/\s+/)).toEqual(["item"]);
+      expect((a.querySelector(".item-check") as HTMLInputElement).checked).toBe(true);
+      expect((b.querySelector(".item-check") as HTMLInputElement).checked).toBe(false);
+
+      const qa = a.querySelector(".qty-badge")!;
+      const qb = b.querySelector(".qty-badge")!;
+      expect(qa.textContent).toBe("2 kg");
+      expect(qa.classList.contains("qty-empty")).toBe(false);
+      expect(qb.textContent).toBe("+");
+      expect(qb.classList.contains("qty-empty")).toBe(true);
+      expect(qa.className.trim().split(/\s+/)).toEqual(["qty-badge"]);
+    });
+
+    it("le sélecteur de catégorie d'un article est trié, avec « Sans catégorie » d'abord et la bonne option choisie", async () => {
+      const categories = [makeCategory({ id: "c2", name: "Légumes" }), makeCategory({ id: "c1", name: "Fruits" })];
+      await mount(sampleState({ categories, items: [makeItem({ id: "a", categoryId: "c2" }), makeItem({ id: "b", categoryId: null })] }));
+
+      const selA = rowOf("a").querySelector(".item-category") as HTMLSelectElement;
+      const selB = rowOf("b").querySelector(".item-category") as HTMLSelectElement;
+      expect(Array.from(selA.options).map((o) => [o.value, o.textContent])).toEqual([["", "Sans catégorie"], ["c1", "Fruits"], ["c2", "Légumes"]]);
+      expect(selA.value).toBe("c2");
+      expect(selA.selectedOptions).toHaveLength(1);
+      expect(selB.value).toBe("");
+      expect(selB.selectedIndex).toBe(0);
+      expect(Array.from(selA.options).filter((o) => o.hasAttribute("selected")).map((o) => o.value)).toEqual(["c2"]);
+    });
+
+    it("le bouton « masquer les cochés » change de libellé à chaque clic", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "a" })] }));
+      const btn = () => root.querySelector("#btn-hide-checked") as HTMLElement;
+      expect(btn().getAttribute("aria-label")).toBe("Masquer les articles cochés");
+      btn().click();
+      expect(btn().getAttribute("aria-label")).toBe("Afficher les articles cochés");
+      btn().click();
+      expect(btn().getAttribute("aria-label")).toBe("Masquer les articles cochés");
+    });
+
+    it("l'état initial « masquer » s'affiche dans le libellé du bouton", async () => {
+      const { setHideCheckedPreference } = await import("../lib/hideCheckedPreference");
+      setHideCheckedPreference(true);
+      await mount(sampleState({ items: [makeItem({ id: "a" })] }));
+      expect(root.querySelector("#btn-hide-checked")!.getAttribute("aria-label")).toBe("Afficher les articles cochés");
+    });
+
+    it("un toast d'erreur devient visible tout de suite", async () => {
+      const conn = await mount();
+      conn.emitError("Boom");
+      vi.advanceTimersByTime(1);
+      expect(document.querySelector(".toast")!.classList.contains("visible")).toBe(true);
+    });
+
+    it("la fermeture de la vue arrête de suivre le clavier virtuel", async () => {
+      const removeEventListener = vi.fn();
+      Object.defineProperty(window, "visualViewport", {
+        value: { height: 500, offsetTop: 0, addEventListener: vi.fn(), removeEventListener },
+        configurable: true,
+      });
+      await mount();
+      cleanup();
+      delete (window as unknown as Record<string, unknown>).visualViewport;
+      expect(removeEventListener).toHaveBeenCalled();
+    });
+  });
+  describe("détails de comportement (mutation) — 6", () => {
+    const names = () => Array.from(root.querySelectorAll(".item-name")).map((el) => el.textContent);
+    const sections = () => Array.from(root.querySelectorAll(".category-name")).map((el) => el.textContent);
+    const rowOf = (id: string) => root.querySelector(`.item[data-id="${id}"]`) as HTMLElement;
+
+    it("tri manuel : suit le champ « ordre », quel que soit l'ordre de réception", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "c", name: "C", order: 2 }), makeItem({ id: "a", name: "A", order: 0 }), makeItem({ id: "b", name: "B", order: 1 })] }));
+      expect(names()).toEqual(["A", "B", "C"]);
+    });
+
+    it("catégories : suivent leur champ « ordre »", async () => {
+      const categories = [makeCategory({ id: "c3", name: "Z", order: 2 }), makeCategory({ id: "c1", name: "X", order: 0 }), makeCategory({ id: "c2", name: "Y", order: 1 })];
+      const items = categories.map((c, i) => makeItem({ id: `i${i}`, categoryId: c.id }));
+      await mount(sampleState({ categories, items }));
+      expect(sections()).toEqual(["X", "Y", "Z"]);
+    });
+
+    it("les catégories entièrement cochées passent après, les autres gardent leur ordre", async () => {
+      const mk = (id: string, name: string, order: number) => makeCategory({ id, name, order });
+      const categories = [mk("p", "P", 0), mk("q", "Q", 1), mk("r", "R", 2), mk("s", "S", 3), mk("t", "T", 4)];
+      const items = [
+        makeItem({ id: "p1", categoryId: "p", checked: true }),
+        makeItem({ id: "q1", categoryId: "q" }),
+        makeItem({ id: "r1", categoryId: "r", checked: true }),
+        makeItem({ id: "r2", categoryId: "r" }),
+        makeItem({ id: "s1", categoryId: "s", checked: true }),
+        makeItem({ id: "t1", categoryId: "t" }),
+      ];
+      await mount(sampleState({ categories, items }));
+      expect(sections()).toEqual(["Q", "R", "T", "P", "S"]);
+    });
+
+    it("liste entièrement cochée et masquée : message dédié ; liste vide : message d'accueil ; sinon la liste", async () => {
+      const { setHideCheckedPreference } = await import("../lib/hideCheckedPreference");
+      setHideCheckedPreference(true);
+      await mount(sampleState({ items: [makeItem({ id: "a", checked: true })] }));
+      expect(root.querySelector(".empty-state")!.textContent).toBe("Tous les articles sont cochés (et masqués).");
+      cleanup();
+
+      await mount(sampleState({ items: [] }));
+      expect(root.querySelector(".empty-state")!.textContent).toContain("Ta liste est vide");
+      cleanup();
+
+      await mount(sampleState({ items: [makeItem({ id: "a", checked: true }), makeItem({ id: "b" })] }));
+      expect(root.querySelector(".empty-state")).toBeNull();
+      expect(names()).toHaveLength(1);
+    });
+
+    it("chaque état sans liste à afficher libère le glisser-déposer et le balayage précédents", async () => {
+      const conn = await mount(sampleState({ items: [makeItem({ id: "a" })] }));
+      const release = () => {
+        const d = findDnd(".item-drag-handle").dispose;
+        return d;
+      };
+      // recherche sans résultat
+      let dispose = release();
+      (root.querySelector("#btn-search") as HTMLButtonElement).click();
+      const input = root.querySelector("#search-input") as HTMLInputElement;
+      input.value = "zzz";
+      input.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(150);
+      expect(dispose).toHaveBeenCalled();
+
+      // retour à une liste, puis liste vidée
+      (root.querySelector("#search-close") as HTMLButtonElement).click();
+      dispose = release();
+      conn.emitState(sampleState({ items: [] }));
+      expect(dispose).toHaveBeenCalled();
+    });
+
+    it("tout masqué libère aussi les anciens glisser-déposer", async () => {
+      const conn = await mount(sampleState({ items: [makeItem({ id: "a" })] }));
+      const { setHideCheckedPreference } = await import("../lib/hideCheckedPreference");
+      setHideCheckedPreference(true);
+      const dispose = findDnd(".item-drag-handle").dispose;
+      conn.emitState(sampleState({ items: [makeItem({ id: "a", checked: true })] }));
+      expect(dispose).toHaveBeenCalled();
+    });
+
+    it("structure : attributs exacts des sections, pastilles et lignes", async () => {
+      const categories = [makeCategory({ id: "c1", name: "Fruits", color: 120 })];
+      await mount(sampleState({ categories, items: [makeItem({ id: "a", categoryId: "c1", checked: true }), makeItem({ id: "b", categoryId: null })] }));
+      // « Fruits » est entièrement coché : il passe après « Sans catégorie ».
+      const [free, fruits] = Array.from(root.querySelectorAll(".category-section")) as HTMLElement[];
+      expect(free.getAttributeNames().sort()).toEqual(["class", "data-category-id"]);
+      expect(fruits.getAttributeNames().sort()).toEqual(["class", "data-category-id", "style"]);
+      expect(Array.from(free.querySelector(".category-header")!.childNodes).filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim())).toHaveLength(0);
+      expect(rowOf("a").querySelector(".item-check")!.getAttributeNames().sort()).toEqual(["checked", "class", "data-id", "type"]);
+      expect(rowOf("b").querySelector(".item-check")!.getAttributeNames().sort()).toEqual(["class", "data-id", "type"]);
+    });
+
+    it("cocher sans API de vibration ne lève aucune erreur", async () => {
+      await mount(sampleState({ items: [makeItem({ id: "a" })] }));
+      const onError = vi.fn();
+      window.addEventListener("error", onError);
+      const check = rowOf("a").querySelector(".item-check") as HTMLInputElement;
+      check.checked = true;
+      check.dispatchEvent(new Event("change"));
+      window.removeEventListener("error", onError);
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it("le glisser-déposer d'un article laissé dans sa catégorie n'envoie que le nouvel ordre", async () => {
+      const categories = [makeCategory({ id: "c1", name: "A" }), makeCategory({ id: "c2", name: "B", order: 1 })];
+      const items = [makeItem({ id: "i1", categoryId: "c2" }), makeItem({ id: "i2", categoryId: "c1", order: 1 })];
+      const conn = await mount(sampleState({ categories, items }));
+      conn.send.mockClear();
+      findDnd(".item-drag-handle").opts.onDrop(rowOf("i2"));
+      expect(conn.send.mock.calls.map(([m]) => (m as { type: string }).type)).toEqual(["reorderItems"]);
+    });
+
+    it("options de catégorie : seule la catégorie choisie (ou « Sans catégorie ») porte « selected »", async () => {
+      const categories = [makeCategory({ id: "c1", name: "Fruits" }), makeCategory({ id: "c2", name: "Légumes" })];
+      await mount(sampleState({ categories, items: [makeItem({ id: "a", categoryId: "c2" }), makeItem({ id: "b", categoryId: null })] }));
+      const attrs = (id: string) => Array.from((rowOf(id).querySelector(".item-category") as HTMLSelectElement).options).map((o) => o.getAttributeNames().sort());
+      expect(attrs("a")).toEqual([["value"], ["value"], ["selected", "value"]]);
+      expect(attrs("b")).toEqual([["selected", "value"], ["value"], ["value"]]);
+    });
+  });
+  describe("détails de comportement (mutation) — 7", () => {
+    const rowOf = (id: string) => root.querySelector(`.item[data-id="${id}"]`) as HTMLElement;
+
+    it("après un ajout, le champ de saisie reprend le focus", async () => {
+      await mount(sampleState());
+      const input = root.querySelector("#add-input") as HTMLInputElement;
+      input.value = "Pommes";
+      input.blur();
+      expect(document.activeElement).not.toBe(input);
+      (root.querySelector("#add-form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      expect(document.activeElement).toBe(input);
+    });
+
+    it("cocher sans API de vibration ne provoque aucune erreur dans la console", async () => {
+      vi.stubGlobal("navigator", { userAgent: "test" });
+      await mount(sampleState({ items: [makeItem({ id: "a" })] }));
+      expect(navigator.vibrate).toBeUndefined();
+      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+      const check = rowOf("a").querySelector(".item-check") as HTMLInputElement;
+      check.checked = true;
+      check.dispatchEvent(new Event("change"));
+      expect(errors).not.toHaveBeenCalled();
+    });
+
+    it("chaque nouveau rendu libère le glisser-déposer du rendu précédent", async () => {
+      const conn = await mount(sampleState({ items: [makeItem({ id: "a" })] }));
+      const previous = findDnd(".item-drag-handle").dispose;
+      conn.emitState(sampleState({ items: [makeItem({ id: "a" }), makeItem({ id: "b", order: 1 })] }));
+      expect(previous).toHaveBeenCalled();
+    });
+
+    it("les options de catégorie n'ont aucun texte parasite", async () => {
+      await mount(sampleState({ categories: [makeCategory({ id: "c1", name: "A" }), makeCategory({ id: "c2", name: "B" })], items: [makeItem({ id: "a" })] }));
+      for (const sel of Array.from(root.querySelectorAll("select"))) {
+        const stray = Array.from(sel.childNodes).filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== "");
+        expect(stray).toHaveLength(0);
+      }
     });
   });
 });

@@ -7,4 +7,10 @@ describe("renderQrSvg", () => {
     expect(svg).toContain("<svg");
     expect(svg).toContain("</svg>");
   });
+
+  it("utilise la couleur de l'app pour les modules et un fond transparent", async () => {
+    const svg = await renderQrSvg("x");
+    expect(svg).toContain('stroke="#123524"');
+    expect(svg).not.toContain("#ffffff");
+  });
 });

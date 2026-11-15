@@ -19,7 +19,6 @@ export function exportListState(state: ListState): void {
   const url = URL.createObjectURL(blob);
   const slug =
     state.name
-      .trim()
       .toLowerCase()
       .normalize("NFD")
       .replace(new RegExp("[\\u0300-\\u036f]", "g"), "")
@@ -43,7 +42,6 @@ export async function parseImportFile(file: File): Promise<ImportPayload> {
     throw new Error("Ce fichier n'est pas un JSON valide.");
   }
   if (
-    typeof data !== "object" ||
     data === null ||
     !Array.isArray((data as ImportPayload).items) ||
     !Array.isArray((data as ImportPayload).categories)

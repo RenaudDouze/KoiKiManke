@@ -19,6 +19,18 @@ const mountListView = vi.fn((_root: HTMLElement, _code: string, navigate: Naviga
 vi.mock("./views/home", () => ({ mountHomeView }));
 vi.mock("./views/list", () => ({ mountListView }));
 
+// Enregistrement du service worker et bandeaux PWA : remplacés par des espions
+// (le module « virtual:pwa-register » n'existe que dans un build Vite).
+const applyUpdate = vi.fn(async () => {});
+const registerSW = vi.fn((_options: { onNeedRefresh: () => void }) => applyUpdate);
+const showUpdateBanner = vi.fn();
+const watchOffline = vi.fn();
+vi.mock("virtual:pwa-register", () => ({ registerSW: (...a: Parameters<typeof registerSW>) => registerSW(...a) }));
+vi.mock("./components/pwaBanner", () => ({
+  showUpdateBanner: (...a: Parameters<typeof showUpdateBanner>) => showUpdateBanner(...a),
+  watchOffline: () => watchOffline(),
+}));
+
 // main.ts est un point d'entrée à effets de bord (aucun export, monté une
 // seule fois pour toute la durée du process, aussi bien réel qu'en test) :
 // un seul scénario séquentiel plutôt que des `it()` indépendants — Vitest 5
@@ -36,6 +48,17 @@ describe("main (bootstrap applicatif)", () => {
     const firstPush = vi.spyOn(history, "pushState");
 
     await import("./main");
+
+    // PWA : bandeau hors ligne, service worker, mise à jour annoncée puis appliquée à la demande.
+    expect(watchOffline).toHaveBeenCalledTimes(1);
+    expect(registerSW).toHaveBeenCalledTimes(1);
+    expect(showUpdateBanner).not.toHaveBeenCalled();
+    registerSW.mock.calls[0][0].onNeedRefresh();
+    expect(showUpdateBanner).toHaveBeenCalledTimes(1);
+    expect(applyUpdate).not.toHaveBeenCalled();
+    (showUpdateBanner.mock.calls[0][0] as () => void)();
+    expect(applyUpdate).toHaveBeenCalledWith(true);
+
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     expect(document.documentElement.hasAttribute("data-large-text")).toBe(true);
     await vi.waitFor(() => expect(mountHomeView).toHaveBeenCalled());

@@ -3103,8 +3103,9 @@ describe("mountListView", () => {
       expect(free.getAttributeNames().sort()).toEqual(["class", "data-category-id"]);
       expect(fruits.getAttributeNames().sort()).toEqual(["class", "data-category-id", "style"]);
       expect(Array.from(free.querySelector(".category-header")!.childNodes).filter((n) => n.nodeType === Node.TEXT_NODE && n.textContent!.trim())).toHaveLength(0);
-      expect(rowOf("a").querySelector(".item-check")!.getAttributeNames().sort()).toEqual(["checked", "class", "data-id", "type"]);
-      expect(rowOf("b").querySelector(".item-check")!.getAttributeNames().sort()).toEqual(["class", "data-id", "type"]);
+      expect(rowOf("a").querySelector(".item-check")!.getAttributeNames().sort()).toEqual(["aria-label", "checked", "class", "data-id", "type"]);
+      expect(rowOf("b").querySelector(".item-check")!.getAttributeNames().sort()).toEqual(["aria-label", "class", "data-id", "type"]);
+      expect(rowOf("a").querySelector(".item-check")!.getAttribute("aria-label")).toBe(`Cocher « ${makeItem({ id: "a" }).name} »`);
     });
 
     it("cocher sans API de vibration ne lève aucune erreur", async () => {

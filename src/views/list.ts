@@ -1249,7 +1249,7 @@ export function mountListView(
         <div class="item-swipe-bg" aria-hidden="true">${icons.trash}</div>
         <div class="item-content">
           <button class="drag-handle item-drag-handle" aria-label="Déplacer">${icons.gripVertical}</button>
-          <input type="checkbox" class="item-check" data-id="${id}" ${item.checked ? "checked" : ""} />
+          <input type="checkbox" class="item-check" data-id="${id}" aria-label="Cocher « ${escapeHtml(item.name)} »" ${item.checked ? "checked" : ""} />
           <button class="icon-btn item-priority" data-action="cycle-priority" data-id="${id}" data-priority="${priority}" aria-label="Priorité : ${PRIORITY_LABELS[priority]} (cliquer pour changer)">${PRIORITY_ICONS[priority]}</button>
           <span class="qty-badge ${item.quantity ? "" : "qty-empty"}" data-id="${id}">${escapeHtml(item.quantity) || "+"}</span>
           <span class="item-name" data-id="${id}">${escapeHtml(item.name)}</span>
@@ -1291,8 +1291,8 @@ export function mountListView(
           <h1 class="list-title" id="list-title">${escapeHtml(s.name)}</h1>
           <span class="item-counter" id="item-counter" aria-live="polite"></span>
           <span class="conn-dot" id="conn-dot" title="Connexion…"></span>
-          <button class="icon-btn presence-btn" id="btn-presence" aria-label="Personnes connectées">
-            ${icons.users}<span class="presence-count" id="presence-count">1</span>
+          <button class="icon-btn presence-btn" id="btn-presence">
+            ${icons.users}<span class="sr-only">Personnes connectées : </span><span class="presence-count" id="presence-count">1</span>
           </button>
           <div class="menu-panel presence-panel" id="presence-panel" hidden></div>
           <button class="icon-btn" id="btn-search" aria-label="Rechercher">${icons.search}</button>
